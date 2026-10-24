@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VitalSync - High-Fidelity UI/UX Wireframe Prototype Suite</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Inter', sans-serif; }
+  </style>
+</head>
+<body class="bg-slate-900 text-slate-100 antialiased min-h-screen p-6 lg:p-12">
+
+  <div class="max-w-6xl mx-auto space-y-10">
+
+    <!-- Header -->
+    <div class="border-b border-slate-800 pb-8 flex flex-col md:flex-row md:items-center justify-between gap-6">
+      <div>
+        <div class="flex items-center gap-3 mb-3">
+          <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-teal-500 to-sky-400 flex items-center justify-center text-white font-bold text-lg shadow-lg shadow-teal-500/20">
+            VS
+          </div>
+          <div>
+            <h1 class="text-2xl font-bold text-white tracking-tight">VitalSync Wireframe Prototype Hub</h1>
+            <p class="text-xs text-teal-400 font-medium">8 High-Fidelity Static Viewports • Reference Blueprint for Figma Build</p>
+          </div>
+        </div>
+        <p class="text-sm text-slate-400 max-w-2xl leading-relaxed">
+          Explore the complete enterprise clinical UI/UX suite designed for doctors, patients, staff, and administrators. Built with Tailwind CSS, Inter typography, and strict synthetic healthcare data.
+        </p>
+      </div>
+
+      <div class="flex flex-wrap gap-2 text-xs">
+        <span class="px-3 py-1.5 rounded-lg bg-teal-500/10 text-teal-300 border border-teal-500/30 font-semibold">
+          Strictly Synthetic PHI Data
+        </span>
+        <span class="px-3 py-1.5 rounded-lg bg-slate-800 text-slate-300 border border-slate-700">
+          WCAG 2.1 AA Compliant
+        </span>
+      </div>
+    </div>
+
+    <!-- Wireframe Cards Grid (8 screens) -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+
+      <!-- Screen 1: Auth -->
+      <a href="screen1-auth.html" class="group bg-slate-800/80 hover:bg-slate-800 border border-slate-700 hover:border-teal-500/60 rounded-2xl p-5 transition flex flex-col justify-between shadow-sm">
+        <div>
+          <div class="flex items-center justify-between mb-3">
+            <span class="text-xs font-bold text-teal-400 uppercase tracking-wider">Screen 01</span>
+            <span class="px-2 py-0.5 rounded bg-slate-700 text-slate-300 text-[10px] font-semibold">Public</span>
+          </div>
+          <h2 class="text-base font-bold text-white group-hover:text-teal-300 transition">Authentication & Role Gate</h2>
+          <p class="text-xs text-slate-400 mt-2 leading-relaxed">
+            Split-screen authentication, role switcher (Doctor/Patient/Staff/Admin), Google Health SSO, and HIPAA trust callouts.
+          </p>
+        </div>
+        <div class="mt-4 pt-3 border-t border-slate-700/60 flex items-center justify-between text-xs text-teal-400 font-semibold">
+          <span>Launch Screen</span>
+          <span>→</span>
+        </div>
+      </a>
+
+      <!-- Screen 2: Patient Dashboard -->
+      <a href="screen2-patient-dashboard.html" class="group bg-slate-800/80 hover:bg-slate-800 border border-slate-700 hover:border-teal-500/60 rounded-2xl p-5 transition flex flex-col justify-between shadow-sm">
+        <div>
+          <div class="flex items-center justify-between mb-3">
+            <span class="text-xs font-bold text-teal-400 uppercase tracking-wider">Screen 02</span>
+            <span class="px-2 py-0.5 rounded bg-teal-900 text-teal-300 text-[10px] font-semibold">Patient</span>
+          </div>
+          <h2 class="text-base font-bold text-white group-hover:text-teal-300 transition">Patient Health Dashboard</h2>
+          <p class="text-xs text-slate-400 mt-2 leading-relaxed">
+            AI health snapshot, upcoming appointments, sparkline vitals grid, active prescriptions, and RAG health assistant.
+          </p>
+        </div>
+        <div class="mt-4 pt-3 border-t border-slate-700/60 flex items-center justify-between text-xs text-teal-400 font-semibold">
+          <span>Launch Screen</span>
+          <span>→</span>
+        </div>
+      </a>
+
+      <!-- Screen 3: Book Appointment -->
+      <a href="screen3-book-appointment.html" class="group bg-slate-800/80 hover:bg-slate-800 border border-slate-700 hover:border-teal-500/60 rounded-2xl p-5 transition flex flex-col justify-between shadow-sm">
+        <div>
+          <div class="flex items-center justify-between mb-3">
+            <span class="text-xs font-bold text-teal-400 uppercase tracking-wider">Screen 03</span>
+            <span class="px-2 py-0.5 rounded bg-teal-900 text-teal-300 text-[10px] font-semibold">Patient / Staff</span>
+          </div>
+          <h2 class="text-base font-bold text-white group-hover:text-teal-300 transition">Smart Appointment Booking</h2>
+          <p class="text-xs text-slate-400 mt-2 leading-relaxed">
+            Doctor search, live availability status, calendar slot grid, AI scheduling recommendation, and 10-minute atomic hold lock.
+          </p>
+        </div>
+        <div class="mt-4 pt-3 border-t border-slate-700/60 flex items-center justify-between text-xs text-teal-400 font-semibold">
+          <span>Launch Screen</span>
+          <span>→</span>
+        </div>
+      </a>
+
+      <!-- Screen 4: Doctor Dashboard -->
+      <a href="screen4-doctor-dashboard.html" class="group bg-slate-800/80 hover:bg-slate-800 border border-slate-700 hover:border-teal-500/60 rounded-2xl p-5 transition flex flex-col justify-between shadow-sm">
+        <div>
+          <div class="flex items-center justify-between mb-3">
+            <span class="text-xs font-bold text-teal-400 uppercase tracking-wider">Screen 04</span>
+            <span class="px-2 py-0.5 rounded bg-sky-900 text-sky-300 text-[10px] font-semibold">Doctor</span>
+          </div>
+          <h2 class="text-base font-bold text-white group-hover:text-teal-300 transition">Doctor Clinical Cockpit</h2>
+          <p class="text-xs text-slate-400 mt-2 leading-relaxed">
+            Live status toggle (Available/Consult/Break), today's agenda, real-time waiting lobby queue, and next patient AI brief.
+          </p>
+        </div>
+        <div class="mt-4 pt-3 border-t border-slate-700/60 flex items-center justify-between text-xs text-teal-400 font-semibold">
+          <span>Launch Screen</span>
+          <span>→</span>
+        </div>
+      </a>
+
+      <!-- Screen 5: Patient Record & Timeline -->
+      <a href="screen5-patient-record-timeline.html" class="group bg-slate-800/80 hover:bg-slate-800 border border-slate-700 hover:border-teal-500/60 rounded-2xl p-5 transition flex flex-col justify-between shadow-sm">
+        <div>
+          <div class="flex items-center justify-between mb-3">
+            <span class="text-xs font-bold text-teal-400 uppercase tracking-wider">Screen 05</span>
+            <span class="px-2 py-0.5 rounded bg-sky-900 text-sky-300 text-[10px] font-semibold">Doctor / Patient</span>
+          </div>
+          <h2 class="text-base font-bold text-white group-hover:text-teal-300 transition">360° Medical Timeline</h2>
+          <p class="text-xs text-slate-400 mt-2 leading-relaxed">
+            Persistent patient header, high-alert allergy banner, filterable chronological spine (SOAP notes, vitals, abnormal labs).
+          </p>
+        </div>
+        <div class="mt-4 pt-3 border-t border-slate-700/60 flex items-center justify-between text-xs text-teal-400 font-semibold">
+          <span>Launch Screen</span>
+          <span>→</span>
+        </div>
+      </a>
+
+      <!-- Screen 6: Encounter & Prescription Workspace -->
+      <a href="screen6-encounter-prescription.html" class="group bg-slate-800/80 hover:bg-slate-800 border border-slate-700 hover:border-teal-500/60 rounded-2xl p-5 transition flex flex-col justify-between shadow-sm">
+        <div>
+          <div class="flex items-center justify-between mb-3">
+            <span class="text-xs font-bold text-teal-400 uppercase tracking-wider">Screen 06</span>
+            <span class="px-2 py-0.5 rounded bg-sky-900 text-sky-300 text-[10px] font-semibold">Doctor</span>
+          </div>
+          <h2 class="text-base font-bold text-white group-hover:text-teal-300 transition">Encounter & Rx Workspace</h2>
+          <p class="text-xs text-slate-400 mt-2 leading-relaxed">
+            SOAP editor with AI copilot drafting, live drug interaction safety alerts, plain-language explainer, and digital signing.
+          </p>
+        </div>
+        <div class="mt-4 pt-3 border-t border-slate-700/60 flex items-center justify-between text-xs text-teal-400 font-semibold">
+          <span>Launch Screen</span>
+          <span>→</span>
+        </div>
+      </a>
+
+      <!-- Screen 7: Staff Availability Board -->
+      <a href="screen7-staff-availability-board.html" class="group bg-slate-800/80 hover:bg-slate-800 border border-slate-700 hover:border-teal-500/60 rounded-2xl p-5 transition flex flex-col justify-between shadow-sm">
+        <div>
+          <div class="flex items-center justify-between mb-3">
+            <span class="text-xs font-bold text-teal-400 uppercase tracking-wider">Screen 07</span>
+            <span class="px-2 py-0.5 rounded bg-indigo-900 text-indigo-300 text-[10px] font-semibold">Staff</span>
+          </div>
+          <h2 class="text-base font-bold text-white group-hover:text-teal-300 transition">Staff Availability Board</h2>
+          <p class="text-xs text-slate-400 mt-2 leading-relaxed">
+            Real-time grid of doctors × time slots, live check-in queue, and AI no-show risk predictor with risk drivers.
+          </p>
+        </div>
+        <div class="mt-4 pt-3 border-t border-slate-700/60 flex items-center justify-between text-xs text-teal-400 font-semibold">
+          <span>Launch Screen</span>
+          <span>→</span>
+        </div>
+      </a>
+
+      <!-- Screen 8: Admin Console -->
+      <a href="screen8-admin-console.html" class="group bg-slate-800/80 hover:bg-slate-800 border border-slate-700 hover:border-teal-500/60 rounded-2xl p-5 transition flex flex-col justify-between shadow-sm">
+        <div>
+          <div class="flex items-center justify-between mb-3">
+            <span class="text-xs font-bold text-teal-400 uppercase tracking-wider">Screen 08</span>
+            <span class="px-2 py-0.5 rounded bg-purple-900 text-purple-300 text-[10px] font-semibold">Admin</span>
+          </div>
+          <h2 class="text-base font-bold text-white group-hover:text-teal-300 transition">Admin & Compliance Console</h2>
+          <p class="text-xs text-slate-400 mt-2 leading-relaxed">
+            Hospital KPI analytics, RBAC user provisioning table, and immutable WORM audit log stream with HMAC chain verification.
+          </p>
+        </div>
+        <div class="mt-4 pt-3 border-t border-slate-700/60 flex items-center justify-between text-xs text-teal-400 font-semibold">
+          <span>Launch Screen</span>
+          <span>→</span>
+        </div>
+      </a>
+
+    </div>
+
+    <!-- Footer Guide -->
+    <div class="border-t border-slate-800 pt-6 text-xs text-slate-500 flex flex-col md:flex-row justify-between items-center gap-4">
+      <div>
+        Designed for Figma recreation • Refer to <a href="../wireframe-specs.md" class="text-teal-400 hover:underline">wireframe-specs.md</a> for frame-by-frame auto-layout guidelines.
+      </div>
+      <div>
+        VitalSync Architecture Blueprint • ProDesk Capstone 2026
+      </div>
+    </div>
+
+  </div>
+
+</body>
+</html>

@@ -1,0 +1,296 @@
+erDiagram
+    %% VitalSync Healthcare Platform - Entity Relationship Diagram (Mermaid)
+    %% Engine: MongoDB Atlas with Document Patterns
+
+    Users ||--o| Patients : "identifies (1:1)"
+    Users ||--o| Doctors : "credentials (1:1)"
+    Users ||--o| Staff : "credentials (1:1)"
+    Users ||--o{ RefreshTokens : "owns (1:N)"
+    Users ||--o{ Notifications : "receives (1:N)"
+    Users ||--o{ AuditLogs : "acts_in (1:N)"
+    Users ||--o{ AIRequestLogs : "initiates (1:N)"
+
+    Departments ||--o{ Doctors : "employs (1:N)"
+    Departments ||--o{ Staff : "allocates (1:N)"
+
+    Doctors ||--o{ DoctorSchedules : "configures (1:N)"
+    Doctors ||--o{ AvailabilitySlots : "provides (1:N)"
+    Doctors ||--o{ Appointments : "consults (1:N)"
+    Doctors ||--o{ Encounters : "authors (1:N)"
+    Doctors ||--o{ Prescriptions : "prescribes (1:N)"
+    Doctors ||--o{ LabResults : "reviews (1:N)"
+
+    Patients ||--o{ Appointments : "schedules (1:N)"
+    Patients ||--o{ Encounters : "undergoes (1:N)"
+    Patients ||--o{ Vitals : "measures (1:N)"
+    Patients ||--o{ Diagnoses : "diagnosed_with (1:N)"
+    Patients ||--o{ Allergies : "exhibits (1:N)"
+    Patients ||--o{ LabResults : "tested_for (1:N)"
+    Patients ||--o{ Documents : "owns (1:N)"
+    Patients ||--o{ Prescriptions : "dispensed_to (1:N)"
+    Patients ||--o{ AIInsights : "analyzed_for (1:N)"
+    Patients ||--o{ EmbeddingChunks : "scoped_by (1:N)"
+
+    DoctorSchedules ||--o{ AvailabilitySlots : "generates (1:N)"
+    AvailabilitySlots ||--|| Appointments : "reserves (1:1)"
+    Appointments ||--|| Encounters : "records (1:1)"
+    Encounters ||--o{ Prescriptions : "generates (1:N)"
+    Encounters ||--o{ Diagnoses : "establishes (1:N)"
+    Encounters ||--o{ LabResults : "orders (1:N)"
+
+    Users {
+        string id PK
+        string email UK
+        string passwordHash
+        string role "DOCTOR | PATIENT | STAFF | ADMIN"
+        string firstName
+        string lastName
+        string phone "CSFLE_ENCRYPTED"
+        boolean isMfaEnabled
+        string status "ACTIVE | SUSPENDED"
+        timestamp lastLoginAt
+    }
+
+    Patients {
+        string id PK
+        string userId FK
+        string mrn UK "VSYN-YYYY-XXXXXX"
+        date dateOfBirth
+        string gender "MALE | FEMALE | OTHER"
+        string bloodGroup "A+ | O+ | B+ | AB-"
+        string emergencyContactPhone "CSFLE_ENCRYPTED"
+        string addressLine1 "CSFLE_ENCRYPTED"
+        string insuranceProvider
+        string insurancePolicyNumber "CSFLE_ENCRYPTED"
+        string primaryDoctorId FK
+    }
+
+    Doctors {
+        string id PK
+        string userId FK
+        string departmentId FK
+        string licenseNumber UK
+        string specialty
+        string qualification
+        numeric consultationFee
+        int defaultSlotDurationMinutes
+        string currentStatus "AVAILABLE | IN_CONSULTATION | ON_BREAK | OFF_DUTY"
+    }
+
+    Staff {
+        string id PK
+        string userId FK
+        string departmentId FK
+        string employeeId UK
+        string shiftSchedule
+        string deskLocation
+    }
+
+    Departments {
+        string id PK
+        string name UK
+        string code UK
+        string locationBuilding
+        string locationFloor
+        boolean isActive
+    }
+
+    DoctorSchedules {
+        string id PK
+        string doctorId FK
+        int dayOfWeek "0 to 6"
+        string startTime "09:00"
+        string endTime "17:00"
+        string breakStartTime
+        string breakEndTime
+        int slotDurationMinutes
+    }
+
+    AvailabilitySlots {
+        string id PK
+        string doctorId FK "Compound UK with startTime"
+        string scheduleId FK
+        timestamp startTime "Compound UK with doctorId"
+        timestamp endTime
+        string status "AVAILABLE | HELD | BOOKED | BLOCKED"
+        string heldByUserId FK
+        timestamp heldUntil "TTL_INDEX_10_MIN"
+        string appointmentId FK
+        int version "Optimistic Lock"
+    }
+
+    Appointments {
+        string id PK
+        string appointmentNumber UK
+        string patientId FK
+        string doctorId FK
+        string slotId FK
+        timestamp scheduledAt
+        string type "IN_PERSON | TELEHEALTH"
+        string status "REQUESTED | CONFIRMED | CHECKED_IN | IN_PROGRESS | COMPLETED | CANCELLED | NO_SHOW"
+        string chiefComplaint
+        numeric noShowRiskScore "AI Prediction"
+        string noShowRiskFactors
+    }
+
+    Encounters {
+        string id PK
+        string encounterNumber UK
+        string appointmentId FK
+        string patientId FK
+        string doctorId FK
+        timestamp encounterDate
+        string subjective "CSFLE_ENCRYPTED"
+        string objective "CSFLE_ENCRYPTED"
+        string assessment "CSFLE_ENCRYPTED"
+        string plan "CSFLE_ENCRYPTED"
+        json vitalsSnapshot "Embedded Snapshot"
+        boolean isAiDrafted
+        string status "DRAFT | FINALIZED | AMENDED"
+        timestamp signedAt
+    }
+
+    Vitals {
+        string id PK
+        string patientId FK
+        string encounterId FK
+        string recordedByStaffId FK
+        timestamp recordedAt
+        int bloodPressureSystolic
+        int bloodPressureDiastolic
+        int heartRateBpm
+        numeric temperatureCelsius
+        numeric oxygenSaturationSpO2
+        numeric weightKg
+        numeric heightCm
+        numeric bmi
+    }
+
+    Diagnoses {
+        string id PK
+        string patientId FK
+        string encounterId FK
+        string icd10Code "e.g. E11.9"
+        string description
+        string type "PRIMARY | SECONDARY"
+        string status "ACTIVE | RESOLVED | CHRONIC"
+        timestamp diagnosedAt
+    }
+
+    Allergies {
+        string id PK
+        string patientId FK
+        string allergen "e.g. Penicillin"
+        string allergenCategory "DRUG | FOOD | ENV"
+        string severity "MILD | MODERATE | SEVERE | LIFE_THREATENING"
+        string reaction
+        string status "ACTIVE | INACTIVE"
+    }
+
+    LabResults {
+        string id PK
+        string patientId FK
+        string encounterId FK
+        string orderedByDoctorId FK
+        string testName "e.g. HbA1c"
+        string loincCode "4548-4"
+        string category "BIOCHEMISTRY"
+        timestamp testDate
+        string status "PENDING | FINAL | ABNORMAL | CRITICAL"
+        json values "Embedded analyte array"
+        string reportDocumentId FK
+    }
+
+    Documents {
+        string id PK
+        string patientId FK
+        string uploadedByUserId FK
+        string fileName
+        string fileType "LAB_REPORT | SCAN_IMAGE"
+        string s3Key UK
+        string sha256Checksum
+        string extractionStatus "PENDING | COMPLETED"
+        json extractedData "Multimodal Vision Output"
+    }
+
+    Medications {
+        string id PK
+        string brandName
+        string genericName
+        string rxcuiCode UK
+        string drugClass
+        string defaultDosage
+        json drugInteractions "Embedded Interaction Rules"
+    }
+
+    Prescriptions {
+        string id PK
+        string prescriptionNumber UK
+        string patientId FK
+        string doctorId FK
+        string encounterId FK
+        string status "DRAFT | ACTIVE | DISPENSED | REFILL_REQUESTED | COMPLETED | CANCELLED"
+        json items "Embedded items array"
+        json statusHistory "Embedded audit trail"
+        json plainLanguageSummary "AI Plain Language Explanation"
+        timestamp issuedAt
+        timestamp expiresAt
+    }
+
+    Notifications {
+        string id PK
+        string recipientUserId FK
+        string type "REMINDER | REFILL | QUEUE | LAB"
+        string channel "IN_APP | EMAIL | SMS"
+        boolean isRead
+        timestamp scheduledFor
+        timestamp sentAt
+    }
+
+    AuditLogs {
+        string id PK
+        timestamp timestamp
+        string actorUserId FK
+        string actorRole
+        string action "CREATE | READ | UPDATE | BREAK_GLASS"
+        string resourceType
+        string resourceId
+        string ipAddress
+        string justification
+        string hash "HMAC_SHA256_CHAIN"
+    }
+
+    AIInsights {
+        string id PK
+        string patientId FK
+        string featureType "PRE_VISIT | SUMMARY | NO_SHOW | RX_EXPLAIN"
+        string inputDataHash
+        json structuredContent "Zod Validated Output"
+        numeric confidenceScore
+        string humanReviewStatus "PENDING | APPROVED | REJECTED"
+        string reviewedByDoctorId FK
+        timestamp reviewedAt
+    }
+
+    AIRequestLogs {
+        string id PK
+        string correlationId UK
+        string userId FK
+        string featureName
+        string modelName "gemini-1.5-pro | flash"
+        int promptTokens
+        int completionTokens
+        int latencyMs
+        boolean piiRedactedFlag
+    }
+
+    EmbeddingChunks {
+        string id PK
+        string patientId FK "Tenant Filter Index"
+        string sourceCollection
+        string sourceDocumentId
+        int chunkIndex
+        string chunkText
+        json embedding "768-dim Vector Index"
+        json metadata
+    }

@@ -1,0 +1,69 @@
+sequenceDiagram
+    autonumber
+    %% VitalSync Healthcare Platform - Atomic Slot Booking & Concurrency Flow
+    actor PatientA as Patient A (Client 1)
+    actor PatientB as Patient B (Client 2)
+    participant FrontDesk as Front Desk Board
+    participant API as Express API Server
+    participant DB as MongoDB Atlas (Replica Set)
+    participant RedisQueue as BullMQ & Redis 7
+    participant SIO as Socket.IO Gateway
+
+    %% Phase 1: Slot Inspection
+    Note over PatientA, DB: Phase 1: Availability Discovery
+    PatientA->>API: GET /api/v1/availability?doctorId=DOC-101&date=2026-10-25
+    API->>DB: find({ doctorId: 'DOC-101', status: 'AVAILABLE' })
+    DB-->>API: Returns slots [09:00, 09:30, 10:00, 10:30]
+    API-->>PatientA: 200 OK (Slots list)
+
+    %% Phase 2: Atomic Reservation (Hold)
+    Note over PatientA, SIO: Phase 2: Atomic 10-Minute Slot Hold
+    PatientA->>API: POST /api/v1/availability/slots/SLOT-1030/hold (auth: PatientA)
+    API->>DB: findOneAndUpdate({ _id: 'SLOT-1030', status: 'AVAILABLE' },<br/>{ $set: { status: 'HELD', heldByUserId: 'USR-A', heldUntil: ISODate(+10m) }, $inc: { version: 1 } },<br/>{ new: true })
+    
+    alt Slot Successfully Reserved (1 document modified)
+        DB-->>API: Updated Slot (status: 'HELD', version: 2)
+        API->>RedisQueue: enqueue('slot-hold-expiry', { slotId: 'SLOT-1030' }, { delay: 600000 })
+        API->>SIO: emitToRooms(['availability:board', 'doctor:DOC-101'], 'slot:held', { slotId: 'SLOT-1030', doctorId: 'DOC-101' })
+        SIO-->>FrontDesk: Real-time update: Slot 10:30 AM locked (Amber badge)
+        SIO-->>PatientB: Real-time update: Slot 10:30 AM disabled
+        API-->>PatientA: 200 OK { holdExpiresAt: "2026-10-25T10:40:00Z", holdToken: "HLD-998" }
+    else Slot Already Held or Booked (0 documents matched)
+        DB-->>API: null
+        API-->>PatientA: 409 Conflict { message: "Slot no longer available", code: "SLOT_CONFLICT" }
+    end
+
+    %% Phase 3: Concurrent Race Condition Case
+    Note over PatientB, API: Phase 3: Concurrent Collision Handling
+    PatientB->>API: POST /api/v1/availability/slots/SLOT-1030/hold (auth: PatientB)
+    API->>DB: findOneAndUpdate({ _id: 'SLOT-1030', status: 'AVAILABLE' }, ... )
+    DB-->>API: null (Condition status == 'AVAILABLE' failed)
+    API-->>PatientB: 409 Conflict { error: "Slot already held by another user", suggestedSlotId: "SLOT-1100" }
+    PatientB->>PatientB: UI shows Toast: "Slot just taken! Recommended next slot: 11:00 AM"
+
+    %% Phase 4: Confirmation & Finalization
+    Note over PatientA, RedisQueue: Phase 4: Booking Confirmation & Transaction
+    PatientA->>API: POST /api/v1/appointments { slotId: 'SLOT-1030', chiefComplaint: 'Follow-up for HbA1c review' }
+    API->>DB: Start MongoDB Client Session Transaction
+    Note over API, DB: Atomic Transaction Commit
+    API->>DB: verifySlot(slotId, status: 'HELD', heldByUserId: 'USR-A', heldUntil > now)
+    API->>DB: Appointments.create({ appointmentNumber: 'APT-20261025-0042', status: 'CONFIRMED', ... })
+    API->>DB: AvailabilitySlots.updateOne({ _id: 'SLOT-1030' }, { $set: { status: 'BOOKED', appointmentId: 'APT-42' }, $unset: { heldByUserId: 1, heldUntil: 1 } })
+    API->>DB: Commit Transaction
+    DB-->>API: Transaction Committed
+
+    API->>RedisQueue: removeJob('slot-hold-expiry:SLOT-1030')
+    API->>RedisQueue: scheduleReminderJob('appointment:remind', { aptId: 'APT-42' }, T-24h)
+    API->>RedisQueue: scheduleReminderJob('appointment:remind', { aptId: 'APT-42' }, T-2h)
+    
+    API->>SIO: emitToRooms(['availability:board', 'doctor:DOC-101'], 'slot:booked', { slotId: 'SLOT-1030', appointmentId: 'APT-42' })
+    SIO-->>FrontDesk: Real-time update: Slot 10:30 AM Booked (Blue badge)
+    API-->>PatientA: 201 Created { appointmentNumber: 'APT-20261025-0042', status: 'CONFIRMED' }
+
+    %% Alternative: Expiry Timeout Flow
+    Note over RedisQueue, SIO: Alternative Flow: Abandoned Hold Expiry (10 min timeout)
+    RedisQueue->>API: BullMQ Event: 'slot-hold-expiry' triggered for abandoned hold
+    API->>DB: findOneAndUpdate({ _id: 'SLOT-XXXX', status: 'HELD', heldUntil: { $lte: now } },<br/>{ $set: { status: 'AVAILABLE' }, $unset: { heldByUserId: 1, heldUntil: 1 } })
+    DB-->>API: Slot reset to 'AVAILABLE'
+    API->>SIO: emitToRoom('availability:board', 'slot:released', { slotId: 'SLOT-XXXX' })
+    SIO-->>FrontDesk: Slot turns Green (Available)

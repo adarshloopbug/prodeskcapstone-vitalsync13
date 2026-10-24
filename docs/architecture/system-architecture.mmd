@@ -1,0 +1,140 @@
+graph TB
+    %% VitalSync Healthcare Platform - End-to-End System Architecture
+    
+    subgraph CLIENT_LAYER ["Client Presentation Layer (Next.js 15 PWA)"]
+        UI_PATIENT["Patient Portal<br/>(Appointments, Timeline, Rx, AI Assistant)"]
+        UI_DOCTOR["Doctor Clinical Cockpit<br/>(SOAP Workspace, Agenda, Patient Snapshot)"]
+        UI_STAFF["Staff Availability Board<br/>(Live Queue, Check-in, Doctor Status)"]
+        UI_ADMIN["Admin & Compliance Console<br/>(RBAC, WORM Audit Viewer, Analytics)"]
+    end
+
+    subgraph INGRESS_LAYER ["Edge Ingress & CDN"]
+        CDN["Cloudflare CDN & Edge Routing<br/>(SSL/TLS 1.3 Termination, DDoS Guard)"]
+        WAF["Web Application Firewall (WAF)<br/>(OWASP Core Rules, IP Rate Limiter)"]
+    end
+
+    subgraph API_GATEWAY ["Core Application Backend (Node.js + Express + TypeScript)"]
+        MIDDLEWARE_CHAIN["Security & Interceptor Pipeline"]
+        
+        subgraph PIPELINE ["Middleware Chain"]
+            HELMET["Helmet & CORS<br/>(Strict CSP, HSTS)"]
+            AUTH_GUARD["Auth & Token Guard<br/>(JWT Verify, Refresh Rotation)"]
+            RBAC_ABAC["RBAC / ABAC Enforcer<br/>(Role + Care Relationship Gate)"]
+            AUDIT_HOOK["Audit Logger Interceptor<br/>(WORM Append-only Hook)"]
+            ZOD_VAL["Zod Request Validator<br/>(Strict DTO Validation)"]
+        end
+
+        subgraph MODULES ["Domain Service Modules"]
+            MOD_AUTH["Auth & Identity Service"]
+            MOD_SCHED["Scheduling & Slot Service<br/>(Atomic MongoDB Reservations)"]
+            MOD_CLINIC["Clinical Core<br/>(Encounters, SOAP, Prescriptions)"]
+            MOD_TIMELINE["Medical History Timeline Engine"]
+            MOD_NOTIF["Notification Dispatcher"]
+        end
+
+        subgraph REALTIME_ENGINE ["Real-Time Gateway (Socket.IO Engine)"]
+            SIO_SERVER["Socket.IO Server (v4.8)<br/>(WebSocket + Polling Fallback)"]
+            SIO_ROOMS["Room Multiplexer<br/>doctor:{id} | patient:{id}<br/>clinic:queue | availability:board"]
+        end
+    end
+
+    subgraph ASYNC_JOBS ["Background Worker Cluster (BullMQ + Redis 7)"]
+        REDIS_CORE["Redis 7 In-Memory Cluster<br/>(Socket.IO Adapter, Session Cache)"]
+        BULL_QUEUE["BullMQ Job Queues"]
+        
+        WORKER_HOLD["Slot Hold Expiry Worker<br/>(10m TTL Releaser)"]
+        WORKER_REMIND["Reminder Scheduler<br/>(T-24h & T-2h Alerts)"]
+        WORKER_AGENDA["Daily Doctor Agenda Cron<br/>(06:00 AM Digest)"]
+        WORKER_OCR["Async Multimodal Lab OCR<br/>(Gemini Vision Extractor)"]
+    end
+
+    subgraph PRIVACY_AI_LAYER ["Privacy Gateway & AI Engine"]
+        PHI_DEID["PHI De-identification & Minimization Engine<br/>(Regex Scrubbing, Synthetic Masking)"]
+        ZOD_AI_PARSER["Structured Output Parser<br/>(Zod JSON Schema Enforcement)"]
+        
+        subgraph GEMINI_API ["Google Gemini AI Services"]
+            GEMINI_PRO["Gemini 1.5 Pro<br/>(SOAP Drafting, Complex Clinical Summaries)"]
+            GEMINI_FLASH["Gemini 1.5 Flash<br/>(Pre-visit Intake, Rx Explainer, No-show Risk)"]
+            GEMINI_EMBED["text-embedding-004<br/>(768-dim Vector Embeddings)"]
+            GEMINI_VISION["Gemini 1.5 Multimodal<br/>(Lab Report & Scanned Document OCR)"]
+        end
+    end
+
+    subgraph STORAGE_LAYER ["Persistence & Storage Layer"]
+        subgraph MONGO_CLUSTER ["MongoDB Atlas Replica Set (WiredTiger)"]
+            MONGO_DOCS["Operational Collections<br/>(Users, Patients, Encounters, Rx)"]
+            MONGO_SLOTS["AvailabilitySlots<br/>(Unique Compound Index: doctorId + startTime)"]
+            MONGO_AUDIT["AuditLogs<br/>(Append-only, HMAC-SHA256 Chained)"]
+            ATLAS_VECTOR["Atlas Vector Search Index<br/>(Scoped by patientId Tenant Filter)"]
+        end
+
+        S3_STORAGE["AWS S3 / Cloudflare R2<br/>(Encrypted Medical Scans, PDF Reports, KMS Key)"]
+    end
+
+    subgraph EXTERNAL_NOTIF ["External Communication Providers"]
+        MOCK_SMS["Mock Twilio SMS Gateway"]
+        MOCK_EMAIL["Mock SendGrid Email Gateway"]
+    end
+
+    %% Client to Ingress
+    UI_PATIENT --> CDN
+    UI_DOCTOR --> CDN
+    UI_STAFF --> CDN
+    UI_ADMIN --> CDN
+    CDN --> WAF
+    WAF --> MIDDLEWARE_CHAIN
+
+    %% Pipeline Flow
+    MIDDLEWARE_CHAIN --> HELMET
+    HELMET --> AUTH_GUARD
+    AUTH_GUARD --> RBAC_ABAC
+    RBAC_ABAC --> AUDIT_HOOK
+    AUDIT_HOOK --> ZOD_VAL
+    ZOD_VAL --> MODULES
+
+    %% Core Services to Persistence
+    MOD_SCHED --> MONGO_SLOTS
+    MOD_CLINIC --> MONGO_DOCS
+    MOD_TIMELINE --> MONGO_DOCS
+    AUDIT_HOOK --> MONGO_AUDIT
+    MOD_CLINIC --> S3_STORAGE
+
+    %% Real-time Wiring
+    MOD_SCHED --> SIO_SERVER
+    MOD_CLINIC --> SIO_SERVER
+    SIO_SERVER --> SIO_ROOMS
+    SIO_SERVER <--> REDIS_CORE
+    SIO_ROOMS -.-> UI_PATIENT
+    SIO_ROOMS -.-> UI_DOCTOR
+    SIO_ROOMS -.-> UI_STAFF
+
+    %% Job Queue Wiring
+    MOD_SCHED --> BULL_QUEUE
+    MOD_NOTIF --> BULL_QUEUE
+    BULL_QUEUE <--> REDIS_CORE
+    BULL_QUEUE --> WORKER_HOLD
+    BULL_QUEUE --> WORKER_REMIND
+    BULL_QUEUE --> WORKER_AGENDA
+    BULL_QUEUE --> WORKER_OCR
+
+    WORKER_HOLD --> MONGO_SLOTS
+    WORKER_HOLD --> SIO_SERVER
+    WORKER_REMIND --> MOCK_SMS
+    WORKER_REMIND --> MOCK_EMAIL
+    WORKER_AGENDA --> MOCK_EMAIL
+
+    %% AI Pipeline Wiring
+    MOD_CLINIC --> PHI_DEID
+    MOD_TIMELINE --> PHI_DEID
+    WORKER_OCR --> PHI_DEID
+
+    PHI_DEID --> GEMINI_PRO
+    PHI_DEID --> GEMINI_FLASH
+    PHI_DEID --> GEMINI_EMBED
+    PHI_DEID --> GEMINI_VISION
+
+    GEMINI_PRO --> ZOD_AI_PARSER
+    GEMINI_FLASH --> ZOD_AI_PARSER
+    GEMINI_EMBED --> ATLAS_VECTOR
+    ZOD_AI_PARSER --> MOD_CLINIC
+    ATLAS_VECTOR --> MOD_TIMELINE

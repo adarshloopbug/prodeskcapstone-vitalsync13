@@ -1,0 +1,85 @@
+sequenceDiagram
+    autonumber
+    %% VitalSync Healthcare Platform - AI Pipeline Architecture
+    %% Covers: (a) AI Encounter-Note Drafting and (b) RBAC-Scoped RAG Ask VitalSync
+
+    %% ==========================================
+    %% PIPELINE A: AI ENCOUNTER-NOTE DRAFTING
+    %% ==========================================
+    box rgba(13, 148, 136, 0.1) "Pipeline A: Clinician SOAP Drafting Flow"
+        actor Doctor as Attending Doctor
+        participant WorkspaceUI as Clinical Workspace (Next.js)
+        participant API as Express API Server
+        participant Redaction as PII Minimization Engine
+        participant GeminiAPI as Gemini 1.5 Pro (Clinical Model)
+        participant ZodEngine as Zod Schema Validator
+        participant DB as MongoDB Atlas
+    end
+
+    Doctor->>WorkspaceUI: Enters rough bullet notes / dictates transcript
+    Doctor->>WorkspaceUI: Clicks "Draft SOAP Note with VitalSync AI"
+    WorkspaceUI->>API: POST /api/v1/ai/encounters/draft-soap<br/>{ encounterId: "ENC-001", patientId: "PAT-101", rawNotes: "Pt c/o thirst..." }
+    
+    API->>DB: Fetch patient context (Allergies, Chronic Diagnoses, Today's Vitals)
+    DB-->>API: Returns context { allergies: ["Penicillin"], diagnoses: ["Type 2 Diabetes"], vitals: { bp: "138/88", hr: 78 } }
+    
+    API->>Redaction: De-identify raw notes (mask names, phone, SSN/Aadhaar)
+    Redaction-->>API: Sanitized notes & tokenized identifier map
+    
+    API->>GeminiAPI: Prompt: Clinical SOAP structuring with few-shot schema<br/>Input: Sanitized notes + Vitals + Chronic history<br/>ResponseFormat: JSON (SOAP Note Schema)
+    GeminiAPI-->>API: Raw JSON response { subjective: "...", objective: "...", assessment: "...", plan: "..." }
+    
+    API->>ZodEngine: Validate against EncounterNoteDraftSchema
+    alt Schema Valid
+        ZodEngine-->>API: Validated SOAP Object + Confidence Score (0.94)
+        API->>DB: Store in AIInsights (status: 'PENDING_REVIEW')
+        API-->>WorkspaceUI: 200 OK { draftSoap: {...}, disclaimer: "AI Draft: Clinician Review Required" }
+        WorkspaceUI->>Doctor: Displays side-by-side editable SOAP draft with review chip
+        Doctor->>WorkspaceUI: Reviews, modifies Assessment/Plan, clicks "Approve & Sign Note"
+        WorkspaceUI->>API: PUT /api/v1/encounters/ENC-001/sign { subjective, objective, assessment, plan }
+        API->>DB: Update Encounters (status: 'FINALIZED', signedAt: now)
+        API->>DB: Update AIInsights (humanReviewStatus: 'APPROVED', modificationsMade: true)
+        API->>DB: Append immutable AuditLog (action: 'SOAP_SIGNED_WITH_AI')
+    else Schema Invalid / JSON Malformed
+        ZodEngine-->>API: ValidationError
+        API-->>WorkspaceUI: Fallback to raw notes with notification: "AI Draft failed schema check. Manual documentation mode."
+    end
+
+    %% ==========================================
+    %% PIPELINE B: RBAC-SCOPED RAG 'ASK VITALSYNC'
+    %% ==========================================
+    box rgba(2, 132, 199, 0.1) "Pipeline B: RBAC-Scoped RAG Assistant"
+        actor User as User (Patient or Doctor)
+        participant ChatUI as Ask VitalSync Drawer
+        participant RAGService as RAG Orchestrator
+        participant EmbedAPI as Gemini text-embedding-004
+        participant VectorDB as Atlas Vector Search
+        participant LLMFlash as Gemini 1.5 Flash
+        participant AuditSvc as WORM Audit Logger
+    end
+
+    User->>ChatUI: Submits query: "What was my HbA1c in the last two visits?"
+    ChatUI->>API: POST /api/v1/ai/rag/query { query: "...", targetPatientId: "PAT-101" }
+    
+    API->>RAGService: Verify RBAC/ABAC Gate
+    Note over RAGService: If Patient: targetPatientId == req.user.patientId<br/>If Doctor: verifyActiveCareRelationship(doctorId, patientId)
+    
+    RAGService->>EmbedAPI: Generate query embedding (768-dim vector)
+    EmbedAPI-->>RAGService: Float32Array[768] vector
+    
+    RAGService->>VectorDB: $vectorSearch on EmbeddingChunks with filter: { patientId: "PAT-101" }
+    Note over VectorDB: CRITICAL: Hard filter guarantees zero<br/>cross-patient data retrieval (Tenant Isolation)
+    VectorDB-->>RAGService: Top 5 chunks (LabResults: HbA1c 7.2% on 2026-06-10, 6.8% on 2026-01-15)
+    
+    RAGService->>Redaction: Scrub context of indirect identifiers
+    Redaction-->>RAGService: Clean grounded context
+    
+    RAGService->>LLMFlash: Prompt with strict grounding instructions:<br/>"Answer ONLY using context. Add citations [Source: DocType #ID].<br/>Never invent clinical values. Add standard medical disclaimer."
+    LLMFlash-->>RAGService: Grounded response text with citation placeholders
+    
+    RAGService->>ZodEngine: Verify structured answer & citation mapping
+    ZodEngine-->>RAGService: Validated payload with verified source links
+    
+    RAGService->>AuditSvc: Log AIRequestLog (tokens: 380, latency: 680ms, piiRedacted: true)
+    RAGService-->>ChatUI: 200 OK { answer: "Your HbA1c was 7.2% on June 10...", citations: [{ id: "LAB-902", date: "2026-06-10" }], disclaimer: "Assistive AI only. Consult your doctor." }
+    ChatUI->>User: Renders natural language answer with interactive source citation pills

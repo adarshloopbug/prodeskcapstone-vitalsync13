@@ -1,0 +1,84 @@
+stateDiagram-v2
+    %% VitalSync Healthcare Platform - Core State Machines
+    %% Visualizes Appointment and Prescription Lifecycles with Role-Based Transition Guards
+
+    %% ==========================================
+    %% 1. APPOINTMENT LIFECYCLE STATE MACHINE
+    %% ==========================================
+    state "APPOINTMENT LIFECYCLE" as AppointmentFlow {
+        [*] --> Requested : Patient submits slot hold / Staff phone intake\n[Actor: PATIENT | STAFF]
+        
+        Requested --> Confirmed : Slot hold validated & details recorded\n[Actor: SYSTEM | STAFF]
+        
+        Confirmed --> Checked_In : Patient arrives at hospital, vitals captured\n[Actor: STAFF]
+        
+        Checked_In --> In_Progress : Doctor calls patient into consultation chamber\n[Actor: DOCTOR]
+        
+        In_Progress --> Completed : Doctor finalizes consultation & signs SOAP note\n[Actor: DOCTOR]
+        
+        Confirmed --> Rescheduled : Patient or Staff moves booking to new slot\n[Actor: PATIENT | STAFF]
+        Rescheduled --> Confirmed : New slot atomically reserved\n[Actor: SYSTEM]
+
+        Requested --> Cancelled : Patient cancels or Staff rejects intake\n[Actor: PATIENT | STAFF | SYSTEM]
+        
+        Confirmed --> Cancelled : Cancellation with mandatory reason (>2h prior)\n[Actor: PATIENT | DOCTOR | STAFF]
+        
+        Confirmed --> No_Show : Patient fails to arrive within 30 min of slot start\n[Actor: STAFF | SYSTEM (Cron)]
+
+        Completed --> [*]
+        Cancelled --> [*]
+        No_Show --> [*]
+
+        note right of Checked_In
+            Vitals (BP, HR, SpO2, Temp) must be 
+            recorded before consultation can start.
+        end note
+
+        note right of No_Show
+            Triggers AI No-Show model feedback loop
+            to update future risk weighting.
+        end note
+    }
+
+    %% ==========================================
+    %% 2. PRESCRIPTION LIFECYCLE STATE MACHINE
+    %% ==========================================
+    state "PRESCRIPTION LIFECYCLE" as PrescriptionFlow {
+        [*] --> Draft : Doctor selects medication items & dosages\n[Actor: DOCTOR]
+        
+        Draft --> Active : Doctor reviews interaction alerts & signs digitally\n[Actor: DOCTOR]
+        
+        Draft --> Cancelled : Doctor discards draft prescription\n[Actor: DOCTOR]
+        
+        Active --> Dispensed : Hospital or partner pharmacy fulfills medication\n[Actor: STAFF (Pharmacist)]
+        
+        Active --> Refill_Requested : Patient requests refill when refillsRemaining > 0\n[Actor: PATIENT]
+        
+        Dispensed --> Refill_Requested : Patient requests maintenance refill\n[Actor: PATIENT]
+        
+        Refill_Requested --> Active : Doctor reviews patient response & approves refill\n[Actor: DOCTOR]
+        
+        Refill_Requested --> Cancelled : Doctor denies refill request with clinical reason\n[Actor: DOCTOR]
+        
+        Active --> Completed : Full course duration elapsed with 0 refills remaining\n[Actor: SYSTEM (Cron)]
+        
+        Dispensed --> Completed : Final course finished, adherence documented\n[Actor: SYSTEM (Cron)]
+        
+        Active --> Expired : Regulatory validity window (6/12 months) exceeded\n[Actor: SYSTEM (Cron)]
+        
+        Active --> Cancelled : Discontinued due to adverse reaction or changed therapy\n[Actor: DOCTOR]
+
+        Completed --> [*]
+        Expired --> [*]
+        Cancelled --> [*]
+
+        note right of Draft
+            Live safety check evaluates 
+            Allergies and Drug-Drug interactions.
+        end note
+
+        note right of Active
+            Triggers AI Plain-Language Explainer
+            generation in Patient Portal.
+        end note
+    }

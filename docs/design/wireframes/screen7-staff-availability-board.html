@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VitalSync - Staff Availability Board & Triage Queue</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Inter', sans-serif; }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-900 antialiased min-h-screen flex flex-col justify-between">
+
+  <!-- Top Operational Bar -->
+  <header class="bg-white border-b border-slate-200 px-6 py-3 flex items-center justify-between sticky top-0 z-20">
+    <div class="flex items-center gap-4">
+      <div class="w-8 h-8 rounded-lg bg-teal-600 text-white font-bold flex items-center justify-center text-sm shadow">
+        VS
+      </div>
+      <div>
+        <div class="flex items-center gap-2">
+          <h1 class="text-sm font-bold text-slate-900">Hospital Operations & Front Desk Cockpit</h1>
+          <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
+            <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+            Socket.IO Real-Time Stream
+          </span>
+        </div>
+        <p class="text-[11px] text-slate-500">OPD Outpatient Wing A • Shift: Morning (08:00 - 16:00)</p>
+      </div>
+    </div>
+
+    <!-- Live Clinic Load Metrics -->
+    <div class="hidden lg:flex items-center gap-6 text-xs">
+      <div>
+        <span class="text-slate-400 block text-[10px] uppercase font-semibold">Doctors on Duty</span>
+        <strong class="text-slate-900 font-bold">18 Active</strong>
+      </div>
+      <div class="h-6 w-px bg-slate-200"></div>
+      <div>
+        <span class="text-slate-400 block text-[10px] uppercase font-semibold">Patients Checked In</span>
+        <strong class="text-amber-600 font-bold">12 Waiting</strong>
+      </div>
+      <div class="h-6 w-px bg-slate-200"></div>
+      <div>
+        <span class="text-slate-400 block text-[10px] uppercase font-semibold">Average Clinic Wait</span>
+        <strong class="text-slate-900 font-bold">14.2 min</strong>
+      </div>
+      <div class="h-6 w-px bg-slate-200"></div>
+      <div>
+        <span class="text-slate-400 block text-[10px] uppercase font-semibold">No-Show Risk Flag</span>
+        <strong class="text-emerald-600 font-bold">6.8% (Controlled)</strong>
+      </div>
+    </div>
+
+    <div class="flex items-center gap-3">
+      <button class="px-3 py-1.5 bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs rounded-lg shadow transition">
+        + Walk-in Rapid Booking
+      </button>
+      <a href="index.html" class="text-xs text-teal-600 hover:underline font-medium">All Screens</a>
+    </div>
+  </header>
+
+  <!-- Page Content -->
+  <main class="flex-1 p-6 space-y-6 max-w-[1600px] w-full mx-auto">
+
+    <!-- Section 1: Real-Time Doctor Availability Matrix (Doctors × Slots Grid) -->
+    <section class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+      <div class="p-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
+        <div>
+          <h2 class="font-bold text-slate-900 text-sm">Real-Time Clinician Availability Matrix</h2>
+          <p class="text-xs text-slate-500">Live slot states updated atomically across outpatient chambers</p>
+        </div>
+        <div class="flex items-center gap-3 text-xs">
+          <span class="flex items-center gap-1 text-emerald-700 font-medium"><span class="w-2 h-2 rounded-full bg-emerald-500"></span> Available</span>
+          <span class="flex items-center gap-1 text-teal-700 font-medium"><span class="w-2 h-2 rounded-full bg-teal-600"></span> In Consultation</span>
+          <span class="flex items-center gap-1 text-amber-700 font-medium"><span class="w-2 h-2 rounded-full bg-amber-500"></span> Slot Held (10m)</span>
+          <span class="flex items-center gap-1 text-slate-600 font-medium"><span class="w-2 h-2 rounded-full bg-blue-600"></span> Booked</span>
+        </div>
+      </div>
+
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-xs border-collapse">
+          <thead>
+            <tr class="border-b border-slate-200 bg-slate-100/60 text-slate-500 font-semibold uppercase text-[11px]">
+              <th class="py-3 px-4 w-64">Doctor & Department</th>
+              <th class="py-3 px-3 w-32">Live Status</th>
+              <th class="py-3 px-2 text-center">09:00 AM</th>
+              <th class="py-3 px-2 text-center">09:30 AM</th>
+              <th class="py-3 px-2 text-center">10:00 AM</th>
+              <th class="py-3 px-2 text-center">10:30 AM</th>
+              <th class="py-3 px-2 text-center">11:00 AM</th>
+              <th class="py-3 px-2 text-center">11:30 AM</th>
+              <th class="py-3 px-2 text-center">12:00 PM</th>
+              <th class="py-3 px-4 text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-100">
+            
+            <!-- Doctor 1: Dr. Priya Sharma -->
+            <tr class="hover:bg-slate-50 transition">
+              <td class="py-3 px-4">
+                <div class="flex items-center gap-3">
+                  <div class="w-8 h-8 rounded-full bg-teal-600 text-white font-bold flex items-center justify-center text-xs">PS</div>
+                  <div>
+                    <span class="font-bold text-slate-900 block">Dr. Priya Sharma</span>
+                    <span class="text-[11px] text-slate-500">Internal Med • Chamber 3B</span>
+                  </div>
+                </div>
+              </td>
+              <td class="py-3 px-3">
+                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold">
+                  <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Available
+                </span>
+              </td>
+              <td class="py-3 px-2 text-center"><span class="px-2 py-1 rounded bg-slate-100 text-slate-400 line-through">Done</span></td>
+              <td class="py-3 px-2 text-center"><span class="px-2 py-1 rounded bg-slate-100 text-slate-400 line-through">Done</span></td>
+              <td class="py-3 px-2 text-center"><span class="px-2 py-1 rounded bg-blue-100 text-blue-800 font-semibold">Booked</span></td>
+              <!-- Held Slot -->
+              <td class="py-3 px-2 text-center">
+                <span class="px-2 py-1 rounded bg-amber-100 text-amber-900 border border-amber-300 font-bold text-[10px] block">
+                  Held (09:42)
+                </span>
+              </td>
+              <td class="py-3 px-2 text-center"><span class="px-2 py-1 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 font-semibold">Open</span></td>
+              <td class="py-3 px-2 text-center"><span class="px-2 py-1 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 font-semibold">Open</span></td>
+              <td class="py-3 px-2 text-center"><span class="px-2 py-1 rounded bg-slate-100 text-slate-400">Break</span></td>
+              <td class="py-3 px-4 text-right">
+                <button class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded font-medium text-xs">Manage</button>
+              </td>
+            </tr>
+
+            <!-- Doctor 2: Dr. Marcus Vance -->
+            <tr class="hover:bg-slate-50 transition">
+              <td class="py-3 px-4">
+                <div class="flex items-center gap-3">
+                  <div class="w-8 h-8 rounded-full bg-sky-600 text-white font-bold flex items-center justify-center text-xs">MV</div>
+                  <div>
+                    <span class="font-bold text-slate-900 block">Dr. Marcus Vance</span>
+                    <span class="text-[11px] text-slate-500">Cardiology • Chamber 1A</span>
+                  </div>
+                </div>
+              </td>
+              <td class="py-3 px-3">
+                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-teal-100 text-teal-800 text-[10px] font-bold">
+                  <span class="w-1.5 h-1.5 rounded-full bg-teal-600"></span> In Consult
+                </span>
+              </td>
+              <td class="py-3 px-2 text-center"><span class="px-2 py-1 rounded bg-slate-100 text-slate-400 line-through">Done</span></td>
+              <td class="py-3 px-2 text-center"><span class="px-2 py-1 rounded bg-blue-100 text-blue-800 font-semibold">Booked</span></td>
+              <td class="py-3 px-2 text-center"><span class="px-2 py-1 rounded bg-blue-100 text-blue-800 font-semibold">Booked</span></td>
+              <td class="py-3 px-2 text-center"><span class="px-2 py-1 rounded bg-blue-100 text-blue-800 font-semibold">Booked</span></td>
+              <td class="py-3 px-2 text-center"><span class="px-2 py-1 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 font-semibold">Open</span></td>
+              <td class="py-3 px-2 text-center"><span class="px-2 py-1 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 font-semibold">Open</span></td>
+              <td class="py-3 px-2 text-center"><span class="px-2 py-1 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 font-semibold">Open</span></td>
+              <td class="py-3 px-4 text-right">
+                <button class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded font-medium text-xs">Manage</button>
+              </td>
+            </tr>
+
+            <!-- Doctor 3: Dr. Sunita Kulkarni -->
+            <tr class="hover:bg-slate-50 transition">
+              <td class="py-3 px-4">
+                <div class="flex items-center gap-3">
+                  <div class="w-8 h-8 rounded-full bg-purple-600 text-white font-bold flex items-center justify-center text-xs">SK</div>
+                  <div>
+                    <span class="font-bold text-slate-900 block">Dr. Sunita Kulkarni</span>
+                    <span class="text-[11px] text-slate-500">Pediatrics • Chamber 2B</span>
+                  </div>
+                </div>
+              </td>
+              <td class="py-3 px-3">
+                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[10px] font-bold">
+                  <span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span> On Break
+                </span>
+              </td>
+              <td class="py-3 px-2 text-center"><span class="px-2 py-1 rounded bg-slate-100 text-slate-400 line-through">Done</span></td>
+              <td class="py-3 px-2 text-center"><span class="px-2 py-1 rounded bg-slate-100 text-slate-400 line-through">Done</span></td>
+              <td class="py-3 px-2 text-center"><span class="px-2 py-1 rounded bg-slate-100 text-slate-400">Break</span></td>
+              <td class="py-3 px-2 text-center"><span class="px-2 py-1 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 font-semibold">Open</span></td>
+              <td class="py-3 px-2 text-center"><span class="px-2 py-1 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 font-semibold">Open</span></td>
+              <td class="py-3 px-2 text-center"><span class="px-2 py-1 rounded bg-blue-100 text-blue-800 font-semibold">Booked</span></td>
+              <td class="py-3 px-2 text-center"><span class="px-2 py-1 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 font-semibold">Open</span></td>
+              <td class="py-3 px-4 text-right">
+                <button class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded font-medium text-xs">Manage</button>
+              </td>
+            </tr>
+
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Section 2: Rapid Check-In & AI No-Show Predictor Queue (P2 Feature 6) -->
+    <section class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+      <div class="p-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
+        <div>
+          <h2 class="font-bold text-slate-900 text-sm">Today's Appointment Check-In & AI No-Show Risk Queue</h2>
+          <p class="text-xs text-slate-500">AI evaluates weather, historical commute patterns, and appointment interval to preempt cancellations</p>
+        </div>
+        <div class="flex items-center gap-2">
+          <input type="text" placeholder="Search by patient name or MRN..." class="px-3 py-1.5 border border-slate-300 rounded-lg text-xs w-64 focus:ring-2 focus:ring-teal-500">
+        </div>
+      </div>
+
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-xs">
+          <thead>
+            <tr class="border-b border-slate-200 bg-slate-100/60 text-slate-500 font-semibold uppercase text-[11px]">
+              <th class="py-3 px-4">Time & ID</th>
+              <th class="py-3 px-4">Patient Details</th>
+              <th class="py-3 px-4">Assigned Doctor</th>
+              <th class="py-3 px-4">Status</th>
+              <th class="py-3 px-4">AI No-Show Risk & Factors</th>
+              <th class="py-3 px-4 text-right">Front Desk Action</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-100">
+            
+            <!-- Row 1: Rajesh Patel -->
+            <tr class="hover:bg-slate-50 transition">
+              <td class="py-3.5 px-4 font-mono">
+                <span class="font-bold text-slate-900 block">10:30 AM</span>
+                <span class="text-[10px] text-slate-400">APT-20261025-0042</span>
+              </td>
+              <td class="py-3.5 px-4">
+                <span class="font-bold text-slate-900 block">Rajesh Patel (42M)</span>
+                <span class="text-[11px] text-slate-500">MRN: VSYN-2026-00892</span>
+              </td>
+              <td class="py-3.5 px-4">
+                <span class="font-medium text-slate-800">Dr. Priya Sharma</span>
+                <span class="text-[11px] text-slate-400 block">Chamber 3B</span>
+              </td>
+              <td class="py-3.5 px-4">
+                <span class="px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold text-[11px]">
+                  Checked-In (10:18)
+                </span>
+              </td>
+              <td class="py-3.5 px-4">
+                <div class="flex items-center gap-2">
+                  <span class="px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 font-bold text-xs border border-emerald-200">
+                    Low (8%)
+                  </span>
+                  <span class="text-[11px] text-slate-500">Frequent visitor • Confirmed via SMS</span>
+                </div>
+              </td>
+              <td class="py-3.5 px-4 text-right space-x-2">
+                <button class="px-2.5 py-1 bg-emerald-50 text-emerald-700 rounded font-bold border border-emerald-200">
+                  Vitals Recorded ✓
+                </button>
+              </td>
+            </tr>
+
+            <!-- Row 2: Deepa Nair (High No-Show Risk) -->
+            <tr class="hover:bg-slate-50 transition bg-amber-50/20">
+              <td class="py-3.5 px-4 font-mono">
+                <span class="font-bold text-slate-900 block">11:00 AM</span>
+                <span class="text-[10px] text-slate-400">APT-20261025-0049</span>
+              </td>
+              <td class="py-3.5 px-4">
+                <span class="font-bold text-slate-900 block">Deepa Nair (38F)</span>
+                <span class="text-[11px] text-slate-500">MRN: VSYN-2026-00412</span>
+              </td>
+              <td class="py-3.5 px-4">
+                <span class="font-medium text-slate-800">Dr. Sunita Kulkarni</span>
+                <span class="text-[11px] text-slate-400 block">Chamber 2B</span>
+              </td>
+              <td class="py-3.5 px-4">
+                <span class="px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-700 font-semibold text-[11px]">
+                  Confirmed
+                </span>
+              </td>
+              <!-- AI No-show Risk Warning -->
+              <td class="py-3.5 px-4">
+                <div class="space-y-1">
+                  <div class="flex items-center gap-2">
+                    <span class="px-2 py-0.5 rounded bg-rose-100 text-rose-800 font-bold text-xs border border-rose-200">
+                      High (64%)
+                    </span>
+                    <span class="text-[11px] text-rose-700 font-medium">Smart Overbooking Candidate</span>
+                  </div>
+                  <div class="text-[10px] text-slate-500">
+                    Reasons: 2 consecutive missed rainy appointments, 24km commute distance.
+                  </div>
+                </div>
+              </td>
+              <td class="py-3.5 px-4 text-right space-x-2">
+                <button class="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 rounded font-semibold border border-amber-200">
+                  Send WhatsApp Ping
+                </button>
+                <button class="px-2.5 py-1 bg-teal-600 hover:bg-teal-700 text-white rounded font-bold">
+                  Check-In
+                </button>
+              </td>
+            </tr>
+
+            <!-- Row 3: Amit Kumar -->
+            <tr class="hover:bg-slate-50 transition">
+              <td class="py-3.5 px-4 font-mono">
+                <span class="font-bold text-slate-900 block">11:30 AM</span>
+                <span class="text-[10px] text-slate-400">APT-20261025-0051</span>
+              </td>
+              <td class="py-3.5 px-4">
+                <span class="font-bold text-slate-900 block">Amit Kumar (34M)</span>
+                <span class="text-[11px] text-slate-500">MRN: VSYN-2026-00914</span>
+              </td>
+              <td class="py-3.5 px-4">
+                <span class="font-medium text-slate-800">Dr. Priya Sharma</span>
+                <span class="text-[11px] text-slate-400 block">Chamber 3B</span>
+              </td>
+              <td class="py-3.5 px-4">
+                <span class="px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-800 font-semibold text-[11px]">
+                  Arrived (In Triage)
+                </span>
+              </td>
+              <td class="py-3.5 px-4">
+                <div class="flex items-center gap-2">
+                  <span class="px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 font-bold text-xs border border-emerald-200">
+                    Low (12%)
+                  </span>
+                  <span class="text-[11px] text-slate-500">Routine follow-up</span>
+                </div>
+              </td>
+              <td class="py-3.5 px-4 text-right space-x-2">
+                <button class="px-2.5 py-1 bg-teal-50 hover:bg-teal-100 text-teal-700 rounded font-bold border border-teal-200">
+                  Record Vitals
+                </button>
+              </td>
+            </tr>
+
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+  </main>
+
+</body>
+</html>

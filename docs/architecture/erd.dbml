@@ -1,0 +1,544 @@
+// VitalSync Healthcare Platform - Entity Relationship Diagram (DBML)
+// Format: Database Markup Language (dbdiagram.io)
+// Database Engine: MongoDB Atlas (Document Store with Reference & Embedded Patterns)
+
+Project VitalSync {
+  database_type: 'MongoDB'
+  Note: '''
+    # VitalSync EHR Platform Data Architecture
+    Combines relational integrity with MongoDB document flexibility.
+    - All data represented is strictly synthetic (HIPAA compliance benchmark).
+    - Fields marked with [CSFLE] use Client-Side Field-Level Encryption (AES-256-GCM / HMAC-SHA-256).
+    - Relationships are categorized as either REFERENCED (normalized) or EMBEDDED (denormalized).
+  '''
+}
+
+// ==========================================
+// AUTHENTICATION & IDENTITY DOMAIN
+// ==========================================
+
+Table Users {
+  id string [pk, note: 'ObjectId primary key']
+  email string [unique, not null, note: 'Unique index; user login credential']
+  passwordHash string [note: 'bcrypt salted hash; null if OAuth-only']
+  role string [not null, note: 'Enum: DOCTOR, PATIENT, STAFF, ADMIN']
+  firstName string [not null]
+  lastName string [not null]
+  phone string [note: '[CSFLE] Encrypted contact number']
+  isMfaEnabled boolean [default: false]
+  mfaSecret string [note: 'Encrypted TOTP seed']
+  status string [default: 'ACTIVE', note: 'Enum: ACTIVE, SUSPENDED, DEACTIVATED']
+  lastLoginAt timestamp
+  createdAt timestamp [default: `now()`]
+  updatedAt timestamp
+
+  indexes {
+    email [unique]
+    role
+  }
+  Note: 'Core identity record. Kept lean to isolate auth credentials from PHI.'
+}
+
+Table RefreshTokens {
+  id string [pk]
+  userId string [ref: > Users.id, not null]
+  tokenHash string [unique, not null, note: 'SHA-256 hash of refresh token']
+  familyId string [not null, note: 'UUID for refresh token rotation detection']
+  isRevoked boolean [default: false]
+  expiresAt timestamp [not null, note: 'MongoDB TTL Index: automatically drops expired tokens']
+  ipAddress string
+  userAgent string
+  createdAt timestamp [default: `now()`]
+
+  indexes {
+    tokenHash [unique]
+    userId
+    expiresAt [note: 'TTL index: expireAfterSeconds: 0']
+  }
+  Note: 'Referenced: Token rotation storage with TTL automatic document purging.'
+}
+
+// ==========================================
+// CORE CLINICAL ACTORS & STRUCTURE
+// ==========================================
+
+Table Departments {
+  id string [pk]
+  name string [unique, not null, note: 'e.g. Cardiology, Endocrinology, General Medicine']
+  code string [unique, not null, note: 'e.g. CARD-01, ENDO-02']
+  description string
+  headDoctorId string [note: 'ObjectId reference to Doctors']
+  locationBuilding string
+  locationFloor string
+  isActive boolean [default: true]
+  createdAt timestamp [default: `now()`]
+  updatedAt timestamp
+
+  Note: 'Referenced: Organizational boundary for routing, scheduling, and analytics.'
+}
+
+Table Patients {
+  id string [pk]
+  userId string [ref: - Users.id, unique, not null, note: '1-to-1 link to user credentials']
+  mrn string [unique, not null, note: 'Medical Record Number, format: VSYN-YYYY-XXXXXX']
+  dateOfBirth date [not null]
+  gender string [not null, note: 'Enum: MALE, FEMALE, OTHER, PREFER_NOT_TO_SAY']
+  bloodGroup string [note: 'Enum: A+, A-, B+, B-, AB+, AB-, O+, O-']
+  emergencyContactName string [note: '[CSFLE] Encrypted contact name']
+  emergencyContactPhone string [note: '[CSFLE] Encrypted emergency phone']
+  addressLine1 string [note: '[CSFLE] Encrypted residential address']
+  addressCity string
+  addressState string
+  addressPostalCode string
+  insuranceProvider string [note: 'Synthetic insurer: Apex Health, CareFirst Mock']
+  insurancePolicyNumber string [note: '[CSFLE] Encrypted policy number']
+  primaryDoctorId string [note: 'ObjectId reference to Doctors']
+  createdAt timestamp [default: `now()`]
+  updatedAt timestamp
+
+  indexes {
+    userId [unique]
+    mrn [unique]
+    primaryDoctorId
+  }
+  Note: 'Referenced: Root clinical identity. Kept referenced from Users to cleanly segment auth from PHI.'
+}
+
+Table Doctors {
+  id string [pk]
+  userId string [ref: - Users.id, unique, not null]
+  departmentId string [ref: > Departments.id, not null]
+  licenseNumber string [unique, not null, note: 'State/National medical board license']
+  specialty string [not null, note: 'e.g. Internal Medicine, Cardiology, Pediatrics']
+  qualification string [note: 'e.g. MBBS, MD (Internal Med), FACC']
+  bio string
+  consultationFee numeric [default: 0]
+  defaultSlotDurationMinutes int [default: 30]
+  currentStatus string [default: 'OFF_DUTY', note: 'Enum: AVAILABLE, IN_CONSULTATION, ON_BREAK, OFF_DUTY']
+  statusUpdatedAt timestamp
+  createdAt timestamp [default: `now()`]
+  updatedAt timestamp
+
+  indexes {
+    userId [unique]
+    departmentId
+    specialty
+    currentStatus
+  }
+  Note: 'Referenced: Clinician professional profile and live availability state.'
+}
+
+Table Staff {
+  id string [pk]
+  userId string [ref: - Users.id, unique, not null]
+  departmentId string [ref: > Departments.id, not null]
+  employeeId string [unique, not null]
+  shiftSchedule string [note: 'e.g. MORNING_08_16, EVENING_14_22']
+  deskLocation string
+  createdAt timestamp [default: `now()`]
+  updatedAt timestamp
+
+  indexes {
+    userId [unique]
+    employeeId
+  }
+  Note: 'Referenced: Front desk, triage nurses, and administrative operators.'
+}
+
+// ==========================================
+// SCHEDULING & REAL-TIME AVAILABILITY
+// ==========================================
+
+Table DoctorSchedules {
+  id string [pk]
+  doctorId string [ref: > Doctors.id, not null]
+  dayOfWeek int [not null, note: '0 = Sunday, 1 = Monday, ..., 6 = Saturday']
+  startTime string [not null, note: 'HH:mm format, e.g. 09:00']
+  endTime string [not null, note: 'HH:mm format, e.g. 17:00']
+  breakStartTime string [note: 'HH:mm format, e.g. 13:00']
+  breakEndTime string [note: 'HH:mm format, e.g. 14:00']
+  slotDurationMinutes int [default: 30]
+  effectiveFrom date [not null]
+  effectiveTo date
+  isHoliday boolean [default: false]
+  createdAt timestamp [default: `now()`]
+
+  indexes {
+    (doctorId, dayOfWeek)
+  }
+  Note: 'Referenced: Weekly recurring availability templates used by the slot generator worker.'
+}
+
+Table AvailabilitySlots {
+  id string [pk]
+  doctorId string [ref: > Doctors.id, not null]
+  scheduleId string [ref: > DoctorSchedules.id]
+  startTime timestamp [not null]
+  endTime timestamp [not null]
+  status string [default: 'AVAILABLE', note: 'Enum: AVAILABLE, HELD, BOOKED, BLOCKED']
+  heldByUserId string [ref: > Users.id, note: 'User session locking this slot']
+  heldUntil timestamp [note: 'TTL index for hold expiry: 10 minute auto-release window']
+  appointmentId string [note: 'Populated once converted to confirmed appointment']
+  version int [default: 1, note: 'Optimistic locking version field']
+  createdAt timestamp [default: `now()`]
+  updatedAt timestamp
+
+  indexes {
+    (doctorId, startTime) [unique, note: 'CRITICAL: Unique compound index preventing double-booking']
+    (doctorId, status, startTime)
+    heldUntil [note: 'TTL index: expires slots held past timeout']
+  }
+  Note: 'Referenced: Atomic unit of scheduling. Unique compound index guarantees zero concurrency overlaps.'
+}
+
+Table Appointments {
+  id string [pk]
+  appointmentNumber string [unique, not null, note: 'Format: APT-YYYYMMDD-XXXX']
+  patientId string [ref: > Patients.id, not null]
+  doctorId string [ref: > Doctors.id, not null]
+  slotId string [ref: - AvailabilitySlots.id, unique, not null]
+  scheduledAt timestamp [not null]
+  estimatedDurationMinutes int [default: 30]
+  type string [default: 'IN_PERSON', note: 'Enum: IN_PERSON, TELEHEALTH, FOLLOW_UP, EMERGENCY']
+  status string [default: 'REQUESTED', note: 'Enum: REQUESTED, CONFIRMED, CHECKED_IN, IN_PROGRESS, COMPLETED, CANCELLED, NO_SHOW, RESCHEDULED']
+  cancellationReason string
+  cancelledByRole string [note: 'Enum: PATIENT, DOCTOR, STAFF, SYSTEM']
+  chiefComplaint string [note: 'Initial patient stated issue']
+  noShowRiskScore numeric [note: 'AI predicted probability 0.00 - 1.00']
+  noShowRiskFactors string [note: 'JSON array of risk drivers']
+  checkInTime timestamp
+  consultationStartTime timestamp
+  consultationEndTime timestamp
+  createdAt timestamp [default: `now()`]
+  updatedAt timestamp
+
+  indexes {
+    appointmentNumber [unique]
+    (patientId, scheduledAt)
+    (doctorId, scheduledAt)
+    (doctorId, status)
+    status
+  }
+  Note: 'Referenced: Core workflow coordination document linking patient, clinician, and slot.'
+}
+
+// ==========================================
+// CLINICAL ENCOUNTERS & MEDICAL TIMELINE
+// ==========================================
+
+Table Encounters {
+  id string [pk]
+  encounterNumber string [unique, not null, note: 'Format: ENC-YYYYMMDD-XXXX']
+  appointmentId string [ref: - Appointments.id, unique, not null]
+  patientId string [ref: > Patients.id, not null]
+  doctorId string [ref: > Doctors.id, not null]
+  encounterDate timestamp [not null]
+  // Structured SOAP clinical note
+  subjective string [note: '[CSFLE] Patient history of present illness & symptoms']
+  objective string [note: '[CSFLE] Physical exam findings & observations']
+  assessment string [note: '[CSFLE] Clinical judgment, differential diagnosis']
+  plan string [note: '[CSFLE] Orders, therapies, follow-up schedule']
+  // Embedded Vitals Snapshot for point-in-time clinical record
+  vitalsSnapshot json [note: 'Embedded document: {systolic, diastolic, hr, temp, spo2, weight, height, bmi}']
+  isAiDrafted boolean [default: false]
+  status string [default: 'DRAFT', note: 'Enum: DRAFT, FINALIZED, AMENDED']
+  signedAt timestamp
+  signedByDoctorId string [ref: > Doctors.id]
+  createdAt timestamp [default: `now()`]
+  updatedAt timestamp
+
+  indexes {
+    encounterNumber [unique]
+    (patientId, encounterDate)
+    appointmentId [unique]
+  }
+  Note: 'Referenced: Legal medical encounter. SOAP fields encrypted; vitals embedded as an immutable snapshot.'
+}
+
+Table Vitals {
+  id string [pk]
+  patientId string [ref: > Patients.id, not null]
+  encounterId string [ref: > Encounters.id]
+  recordedByStaffId string [ref: > Staff.id, not null]
+  recordedAt timestamp [not null, default: `now()`]
+  bloodPressureSystolic int [note: 'mmHg, e.g. 120']
+  bloodPressureDiastolic int [note: 'mmHg, e.g. 80']
+  heartRateBpm int [note: 'bpm, e.g. 72']
+  temperatureCelsius numeric [note: 'e.g. 37.0']
+  oxygenSaturationSpO2 numeric [note: 'Percentage 0-100, e.g. 98.5']
+  respiratoryRate int [note: 'Breaths/min, e.g. 16']
+  weightKg numeric [note: 'e.g. 74.5']
+  heightCm numeric [note: 'e.g. 176.0']
+  bmi numeric [note: 'Calculated: weight / (height/100)^2']
+  notes string
+  createdAt timestamp [default: `now()`]
+
+  indexes {
+    (patientId, recordedAt)
+  }
+  Note: 'Referenced: High-frequency time-series measurements supporting long-term longitudinal charting.'
+}
+
+Table Diagnoses {
+  id string [pk]
+  patientId string [ref: > Patients.id, not null]
+  encounterId string [ref: > Encounters.id]
+  icd10Code string [not null, note: 'e.g. E11.9 (Type 2 Diabetes), I10 (Hypertension)']
+  description string [not null]
+  type string [default: 'PRIMARY', note: 'Enum: PRIMARY, SECONDARY, DIFFERENTIAL']
+  status string [default: 'ACTIVE', note: 'Enum: ACTIVE, RESOLVED, CHRONIC, INACTIVE']
+  diagnosedAt timestamp [not null]
+  resolvedAt timestamp
+
+  indexes {
+    (patientId, status)
+    icd10Code
+  }
+  Note: 'Referenced: Formal patient problem list for rapid clinical lookup and drug-disease interaction checks.'
+}
+
+Table Allergies {
+  id string [pk]
+  patientId string [ref: > Patients.id, not null]
+  allergen string [not null, note: 'e.g. Penicillin, Sulfa, Peanuts, Latex']
+  allergenCategory string [not null, note: 'Enum: DRUG, FOOD, ENVIRONMENTAL, BIOLOGICAL']
+  severity string [not null, note: 'Enum: MILD, MODERATE, SEVERE, LIFE_THREATENING']
+  reaction string [note: 'e.g. Anaphylaxis, Urticaria, Bronchospasm']
+  diagnosedAt date
+  status string [default: 'ACTIVE', note: 'Enum: ACTIVE, INACTIVE, RESOLVED']
+  createdAt timestamp [default: `now()`]
+
+  indexes {
+    (patientId, status)
+    (patientId, allergen)
+  }
+  Note: 'Referenced: Critical safety collection queried synchronously during AI & clinician prescribing.'
+}
+
+Table LabResults {
+  id string [pk]
+  patientId string [ref: > Patients.id, not null]
+  encounterId string [ref: > Encounters.id]
+  orderedByDoctorId string [ref: > Doctors.id, not null]
+  testName string [not null, note: 'e.g. Comprehensive Metabolic Panel, HbA1c, Lipid Profile']
+  loincCode string [note: 'LOINC standard code, e.g. 4548-4 for HbA1c']
+  category string [note: 'Enum: HEMATOLOGY, BIOCHEMISTRY, MICROBIOLOGY, PATHOLOGY']
+  testDate timestamp [not null]
+  status string [default: 'FINAL', note: 'Enum: PENDING, FINAL, ABNORMAL, CRITICAL']
+  // Embedded array of measured parameters
+  values json [note: 'Embedded array: [{parameter: "HbA1c", value: "7.2", unit: "%", referenceRange: "4.0-5.6", isAbnormal: true}]']
+  reportDocumentId string [note: 'ObjectId reference to Documents for source PDF']
+  interpretationNotes string
+  reviewedByDoctorId string [ref: > Doctors.id]
+  reviewedAt timestamp
+  createdAt timestamp [default: `now()`]
+
+  indexes {
+    (patientId, testDate)
+    status
+  }
+  Note: 'Referenced with Embedded Values: Lab document holds an embedded array of atomic analyte readings.'
+}
+
+Table Documents {
+  id string [pk]
+  patientId string [ref: > Patients.id, not null]
+  uploadedByUserId string [ref: > Users.id, not null]
+  fileName string [not null]
+  fileType string [not null, note: 'Enum: LAB_REPORT, SCAN_IMAGE, DISCHARGE_SUMMARY, INSURANCE']
+  mimeType string [not null, note: 'application/pdf, image/jpeg, image/png']
+  s3Key string [unique, not null, note: 'Object storage pointer']
+  s3Bucket string [not null]
+  sizeBytes int [not null]
+  sha256Checksum string [not null]
+  extractionStatus string [default: 'NONE', note: 'Enum: NONE, PENDING, COMPLETED, FAILED']
+  extractedData json [note: 'Embedded JSON extracted by Gemini Multimodal Vision API']
+  createdAt timestamp [default: `now()`]
+
+  indexes {
+    patientId
+    s3Key [unique]
+  }
+  Note: 'Referenced: Pointers to secure encrypted object storage blobs with extracted JSON payload.'
+}
+
+// ==========================================
+// PHARMACY & PRESCRIPTIONS
+// ==========================================
+
+Table Medications {
+  id string [pk]
+  brandName string [not null, note: 'e.g. Glucophage, Zestril, Lipitor']
+  genericName string [not null, note: 'e.g. Metformin, Lisinopril, Atorvastatin']
+  rxcuiCode string [unique, note: 'RxNorm Concept Unique Identifier']
+  drugClass string [note: 'e.g. Biguanide, ACE Inhibitor, HMG-CoA Reductase Inhibitor']
+  defaultDosage string [note: 'e.g. 500mg, 10mg, 20mg']
+  forms json [note: 'Array: ["Tablet", "Capsule", "Oral Solution"]']
+  contraindications json [note: 'Array of ICD-10 or disease strings']
+  // Embedded drug-drug interactions
+  drugInteractions json [note: 'Array: [{interactingGeneric: "Lisinopril", severity: "MODERATE", effect: "Hyperkalemia risk"}]']
+  createdAt timestamp [default: `now()`]
+
+  indexes {
+    genericName
+    brandName
+    rxcuiCode [unique]
+  }
+  Note: 'Referenced: Master medication drug catalog with embedded interaction risk definitions.'
+}
+
+Table Prescriptions {
+  id string [pk]
+  prescriptionNumber string [unique, not null, note: 'Format: RX-YYYYMMDD-XXXX']
+  patientId string [ref: > Patients.id, not null]
+  doctorId string [ref: > Doctors.id, not null]
+  encounterId string [ref: > Encounters.id]
+  status string [default: 'DRAFT', note: 'Enum: DRAFT, ACTIVE, DISPENSED, REFILL_REQUESTED, COMPLETED, EXPIRED, CANCELLED']
+  // Embedded prescription items (bounded 1-10 items per prescription)
+  items json [not null, note: 'Embedded array: [{medicationId, drugName, dosage, frequency, route, durationDays, instructions, refillsAllowed, refillsRemaining}]']
+  // Embedded status audit trail
+  statusHistory json [not null, note: 'Embedded array: [{status, changedByUserId, changedAt, note}]']
+  // Plain language explanation for patient
+  plainLanguageSummary json [note: 'Embedded AI translation: {readingLevel: "Grade 6", summaryEn, summaryHi, precautions}']
+  issuedAt timestamp
+  expiresAt timestamp
+  createdAt timestamp [default: `now()`]
+  updatedAt timestamp
+
+  indexes {
+    prescriptionNumber [unique]
+    (patientId, status)
+    (doctorId, status)
+  }
+  Note: 'Embedded Items Pattern: Items and status history are denormalized inside the prescription to ensure atomic clinical immutability.'
+}
+
+// ==========================================
+// COMMUNICATIONS & AUDIT TRAIL
+// ==========================================
+
+Table Notifications {
+  id string [pk]
+  recipientUserId string [ref: > Users.id, not null]
+  type string [not null, note: 'Enum: APPOINTMENT_REMINDER, REFILL_ALERT, QUEUE_UPDATE, LAB_READY, SYSTEM_ALERT']
+  title string [not null]
+  message string [not null]
+  channel string [not null, note: 'Enum: IN_APP, EMAIL, SMS']
+  isRead boolean [default: false]
+  scheduledFor timestamp
+  sentAt timestamp
+  deliveryStatus string [default: 'PENDING', note: 'Enum: PENDING, SENT, FAILED']
+  metadata json [note: 'Embedded context e.g. {appointmentId, prescriptionId}']
+  createdAt timestamp [default: `now()`]
+
+  indexes {
+    (recipientUserId, isRead, createdAt)
+    scheduledFor
+  }
+  Note: 'Referenced: Dispatched via BullMQ workers and synchronized to client via Socket.IO.'
+}
+
+Table AuditLogs {
+  id string [pk]
+  timestamp timestamp [not null, default: `now()`]
+  actorUserId string [ref: > Users.id, not null]
+  actorRole string [not null, note: 'Enum: DOCTOR, PATIENT, STAFF, ADMIN, SYSTEM']
+  action string [not null, note: 'Enum: CREATE, READ, UPDATE, DELETE, EXPORT, BREAK_GLASS, LOGIN, LOGOUT']
+  resourceType string [not null, note: 'Enum: Patient, Encounter, Prescription, Appointment, User']
+  resourceId string [not null]
+  ipAddress string [not null]
+  userAgent string [not null]
+  changes json [note: 'Diff before/after (sensitive PHI excluded or salted)']
+  justification string [note: 'Mandatory clinical justification for emergency break-glass access']
+  hash string [not null, note: 'HMAC-SHA-256 tamper-evident chain link']
+
+  indexes {
+    (actorUserId, timestamp)
+    (resourceType, resourceId)
+    timestamp
+  }
+  Note: 'Immutable WORM store: Append-only write stream. Cryptographic hash ensures zero retroactive modifications.'
+}
+
+// ==========================================
+// AI SYSTEM & VECTOR RETRIEVAL DOMAIN
+// ==========================================
+
+Table AIInsights {
+  id string [pk]
+  patientId string [ref: > Patients.id, not null]
+  featureType string [not null, note: 'Enum: PRE_VISIT_INTAKE, HISTORY_SUMMARY, NO_SHOW_PREDICTION, PLAIN_LANGUAGE_RX, SMART_SCHEDULING']
+  inputDataHash string [not null, note: 'SHA-256 of de-identified input payload']
+  rawOutput string [note: 'Unparsed LLM output string']
+  structuredContent json [not null, note: 'Zod-validated JSON output conformant to feature schema']
+  confidenceScore numeric [note: '0.00 to 1.00 metric']
+  humanReviewStatus string [default: 'PENDING_REVIEW', note: 'Enum: PENDING_REVIEW, APPROVED, MODIFIED, REJECTED']
+  reviewedByDoctorId string [ref: > Doctors.id]
+  reviewedAt timestamp
+  clinicianNotes string
+  disclaimerAccepted boolean [default: false]
+  createdAt timestamp [default: `now()`]
+
+  indexes {
+    (patientId, featureType)
+    humanReviewStatus
+  }
+  Note: 'Referenced: Stores AI generations with strict human-in-the-loop audit fields before clinical application.'
+}
+
+Table AIRequestLogs {
+  id string [pk]
+  correlationId string [unique, not null, note: 'UUID tracking the end-to-end request lifecycle']
+  userId string [ref: > Users.id, not null]
+  userRole string [not null]
+  featureName string [not null]
+  modelName string [not null, note: 'e.g. gemini-1.5-pro, gemini-1.5-flash, text-embedding-004']
+  promptTokens int [not null]
+  completionTokens int [not null]
+  totalTokens int [not null]
+  latencyMs int [not null]
+  piiRedactedFlag boolean [not null, default: true, note: 'Affirms that de-identification ran prior to inference']
+  createdAt timestamp [default: `now()`]
+
+  indexes {
+    correlationId [unique]
+    (featureName, createdAt)
+    userId
+  }
+  Note: 'Referenced: Observability, rate-limiting, token accounting, and privacy pipeline verification.'
+}
+
+Table EmbeddingChunks {
+  id string [pk]
+  patientId string [ref: > Patients.id, not null, note: 'CRITICAL: Hard tenant partition for RBAC vector filtering']
+  sourceCollection string [not null, note: 'Enum: Encounters, Diagnoses, LabResults, Prescriptions']
+  sourceDocumentId string [not null]
+  chunkIndex int [not null]
+  chunkText string [not null, note: 'De-identified clinical narrative text']
+  // 768-dimensional vector from text-embedding-004
+  embedding json [not null, note: 'Float32Array[768] vector embedding']
+  metadata json [not null, note: 'Embedded metadata: {date, doctorSpecialty, category, recordType}']
+  createdAt timestamp [default: `now()`]
+
+  indexes {
+    patientId [note: 'Vector pre-filter index']
+    (sourceCollection, sourceDocumentId)
+  }
+  Note: '''
+    # Atlas Vector Search Index Definition:
+    {
+      "fields": [
+        {
+          "type": "vector",
+          "path": "embedding",
+          "numDimensions": 768,
+          "similarity": "cosine"
+        },
+        {
+          "type": "filter",
+          "path": "patientId"
+        }
+      ]
+    }
+  '''
+}

@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VitalSync - Patient Medical Record & Longitudinal Timeline</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Inter', sans-serif; }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-900 antialiased min-h-screen flex">
+
+  <!-- Left Sidebar (Desktop 240px) -->
+  <aside class="w-64 bg-white border-r border-slate-200 flex flex-col justify-between hidden md:flex min-h-screen">
+    <div>
+      <div class="p-6 border-b border-slate-100 flex items-center gap-3">
+        <div class="w-8 h-8 rounded-lg bg-gradient-to-tr from-teal-500 to-sky-400 flex items-center justify-center text-white font-bold text-sm shadow">
+          VS
+        </div>
+        <div>
+          <span class="font-bold text-slate-900 text-base">VitalSync</span>
+          <span class="block text-[10px] text-teal-600 font-semibold uppercase tracking-wider">Clinical EMR</span>
+        </div>
+      </div>
+      <nav class="p-4 space-y-1">
+        <a href="screen4-doctor-dashboard.html" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-600 hover:bg-slate-50 font-medium text-sm">
+          <svg class="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
+          <span>Today's Clinic</span>
+        </a>
+        <a href="screen5-patient-record-timeline.html" class="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-teal-50 text-teal-700 font-semibold text-sm">
+          <svg class="w-5 h-5 text-teal-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
+          <span>Patient Registry</span>
+        </a>
+        <a href="screen6-encounter-prescription.html" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-600 hover:bg-slate-50 font-medium text-sm">
+          <svg class="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+          <span>Active Encounter</span>
+        </a>
+      </nav>
+    </div>
+    <div class="p-4 border-t border-slate-200">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-full bg-teal-600 text-white font-bold flex items-center justify-center text-sm shadow">PS</div>
+        <div class="flex-1 min-w-0">
+          <p class="text-sm font-semibold text-slate-900 truncate">Dr. Priya Sharma</p>
+          <p class="text-[11px] text-slate-500">Internal Medicine</p>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Main Viewport -->
+  <div class="flex-1 flex flex-col min-h-screen">
+    
+    <!-- Top Bar -->
+    <header class="h-14 bg-white border-b border-slate-200 px-6 flex items-center justify-between">
+      <div class="flex items-center gap-2 text-xs text-slate-500">
+        <a href="screen4-doctor-dashboard.html" class="hover:text-slate-800">Patients</a>
+        <span>/</span>
+        <span class="font-bold text-slate-900">Rajesh Patel (MRN: VSYN-2026-00892)</span>
+      </div>
+      <div class="flex items-center gap-3">
+        <button class="px-3 py-1.5 bg-indigo-50 border border-indigo-200 text-indigo-700 font-semibold text-xs rounded-lg flex items-center gap-1.5 shadow-sm">
+          <span>✨</span>
+          <span>Ask VitalSync about Rajesh</span>
+        </button>
+        <a href="index.html" class="text-xs text-teal-600 hover:underline font-medium">All Screens</a>
+      </div>
+    </header>
+
+    <!-- Sticky Patient Header & High-Risk Allergy Banner -->
+    <div class="bg-white border-b border-slate-200">
+      
+      <!-- Critical Allergy Banner (P1 Requirement) -->
+      <div class="bg-rose-50 border-b border-rose-200 px-6 py-2.5 flex items-center justify-between text-xs text-rose-900 font-medium">
+        <div class="flex items-center gap-3">
+          <span class="w-6 h-6 rounded-full bg-rose-600 text-white font-bold flex items-center justify-center text-xs shadow-sm">!</span>
+          <span>
+            <strong class="font-bold uppercase tracking-wider text-rose-700">Critical Drug Allergy:</strong> 
+            Penicillin (Severe: Anaphylaxis / Bronchospasm documented 2021) • Avoid all Beta-Lactam antibiotics.
+          </span>
+        </div>
+        <span class="text-[11px] text-rose-600 uppercase font-bold tracking-wider">High Alert</span>
+      </div>
+
+      <!-- Patient Demographics Bar -->
+      <div class="px-6 py-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+        <div class="flex items-center gap-4">
+          <div class="w-14 h-14 rounded-2xl bg-slate-900 text-white font-bold flex items-center justify-center text-xl shadow">
+            RP
+          </div>
+          <div>
+            <div class="flex items-center gap-3">
+              <h2 class="text-xl font-bold text-slate-900">Rajesh Patel</h2>
+              <span class="px-2 py-0.5 rounded bg-slate-100 text-slate-700 text-xs font-semibold">42 Years • Male</span>
+              <span class="px-2 py-0.5 rounded bg-teal-50 text-teal-700 text-xs font-semibold border border-teal-200">Blood Group: B+</span>
+            </div>
+            <div class="mt-1 flex flex-wrap gap-4 text-xs text-slate-500">
+              <span><strong>MRN:</strong> VSYN-2026-00892</span>
+              <span><strong>DOB:</strong> Jul 14, 1984</span>
+              <span><strong>Phone:</strong> +91 ••••• •••10 (CSFLE Protected)</span>
+              <span><strong>Primary Care:</strong> Dr. Priya Sharma</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <a href="screen6-encounter-prescription.html" class="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs rounded-lg shadow transition flex items-center gap-1.5">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+            <span>Start Encounter Note</span>
+          </a>
+          <button class="px-3 py-2 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 font-medium text-xs rounded-lg transition">
+            Export Chart PDF
+          </button>
+        </div>
+      </div>
+
+      <!-- Navigation Tabs -->
+      <div class="px-6 flex gap-6 text-xs font-semibold border-t border-slate-100">
+        <button class="py-3 text-teal-600 border-b-2 border-teal-600">Timeline (All Records)</button>
+        <button class="py-3 text-slate-500 hover:text-slate-800">SOAP Notes (6)</button>
+        <button class="py-3 text-slate-500 hover:text-slate-800">Vitals Flowsheet</button>
+        <button class="py-3 text-slate-500 hover:text-slate-800">Labs & Diagnostic Scans (12)</button>
+        <button class="py-3 text-slate-500 hover:text-slate-800">Prescription History</button>
+      </div>
+    </div>
+
+    <!-- Main Content: Filterable Longitudinal Timeline Feed -->
+    <main class="flex-1 p-6 max-w-7xl w-full mx-auto grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+      <!-- Left Column: Chronological Spine (8 cols) -->
+      <div class="lg:col-span-8 space-y-4">
+        
+        <!-- Filter Toolbar -->
+        <div class="p-3 bg-white rounded-xl border border-slate-200 flex items-center justify-between text-xs">
+          <div class="flex items-center gap-2">
+            <span class="text-slate-400 font-medium">Filter view:</span>
+            <button class="px-2.5 py-1 rounded-md bg-teal-50 text-teal-700 font-bold">All</button>
+            <button class="px-2.5 py-1 rounded-md text-slate-600 hover:bg-slate-100">Encounters</button>
+            <button class="px-2.5 py-1 rounded-md text-slate-600 hover:bg-slate-100">Labs</button>
+            <button class="px-2.5 py-1 rounded-md text-slate-600 hover:bg-slate-100">Vitals</button>
+            <button class="px-2.5 py-1 rounded-md text-slate-600 hover:bg-slate-100">Prescriptions</button>
+          </div>
+          <span class="text-slate-400">Showing 4 historical milestones</span>
+        </div>
+
+        <!-- Timeline Spine -->
+        <div class="relative pl-6 space-y-6 before:absolute before:left-2.5 before:top-3 before:bottom-3 before:w-0.5 before:bg-slate-200">
+
+          <!-- Node 1: Today's Triage Check-In -->
+          <div class="relative">
+            <div class="absolute -left-6 top-1.5 w-5 h-5 rounded-full bg-emerald-500 text-white font-bold flex items-center justify-center text-[10px] shadow">
+              ✓
+            </div>
+            <div class="bg-white rounded-xl p-5 border border-slate-200 shadow-sm">
+              <div class="flex items-center justify-between mb-2">
+                <div class="flex items-center gap-2">
+                  <span class="px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 font-bold text-[11px]">Triage Vitals Check</span>
+                  <span class="text-xs text-slate-500">Today, Oct 25, 2026 • 10:18 AM</span>
+                </div>
+                <span class="text-xs text-slate-400">Recorded by Nurse Ananya Sen</span>
+              </div>
+              <div class="grid grid-cols-4 gap-3 bg-slate-50 p-3 rounded-lg border border-slate-100 text-xs">
+                <div><span class="text-slate-500 block">BP</span><strong class="text-slate-900">138/88 mmHg</strong></div>
+                <div><span class="text-slate-500 block">Pulse</span><strong class="text-slate-900">76 bpm</strong></div>
+                <div><span class="text-slate-500 block">SpO2</span><strong class="text-slate-900">98.5%</strong></div>
+                <div><span class="text-slate-500 block">Weight</span><strong class="text-slate-900">78.4 kg (BMI 25.6)</strong></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Node 2: Lab Result (HbA1c & CMP) -->
+          <div class="relative">
+            <div class="absolute -left-6 top-1.5 w-5 h-5 rounded-full bg-indigo-600 text-white font-bold flex items-center justify-center text-[10px] shadow">
+              ⚗
+            </div>
+            <div class="bg-white rounded-xl p-5 border border-slate-200 shadow-sm">
+              <div class="flex items-center justify-between mb-2">
+                <div class="flex items-center gap-2">
+                  <span class="px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 font-bold text-[11px]">Diagnostic Lab Result</span>
+                  <span class="text-xs text-slate-500">Jun 15, 2026</span>
+                </div>
+                <span class="px-2 py-0.5 rounded bg-amber-50 text-amber-700 text-xs font-semibold">Abnormal Flag</span>
+              </div>
+              <h4 class="font-bold text-slate-900 text-sm">Comprehensive Metabolic Panel & Glycated Hemoglobin</h4>
+              <div class="mt-2 space-y-1.5 text-xs">
+                <div class="flex justify-between py-1 border-b border-slate-100">
+                  <span class="text-slate-700">Hemoglobin A1c (LOINC: 4548-4)</span>
+                  <span class="font-bold text-rose-600">7.2% <span class="font-normal text-slate-400">(Ref: 4.0 - 5.6%)</span></span>
+                </div>
+                <div class="flex justify-between py-1 border-b border-slate-100">
+                  <span class="text-slate-700">Fasting Plasma Glucose</span>
+                  <span class="font-bold text-rose-600">142 mg/dL <span class="font-normal text-slate-400">(Ref: 70 - 99 mg/dL)</span></span>
+                </div>
+                <div class="flex justify-between py-1">
+                  <span class="text-slate-700">eGFR (CKD-EPI)</span>
+                  <span class="font-bold text-emerald-600">&gt; 90 mL/min/1.73m² <span class="font-normal text-slate-400">(Normal)</span></span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Node 3: Clinical SOAP Encounter -->
+          <div class="relative">
+            <div class="absolute -left-6 top-1.5 w-5 h-5 rounded-full bg-teal-600 text-white font-bold flex items-center justify-center text-[10px] shadow">
+              +
+            </div>
+            <div class="bg-white rounded-xl p-5 border border-slate-200 shadow-sm">
+              <div class="flex items-center justify-between mb-2">
+                <div class="flex items-center gap-2">
+                  <span class="px-2 py-0.5 rounded bg-teal-50 text-teal-700 font-bold text-[11px]">SOAP Clinical Note</span>
+                  <span class="text-xs text-slate-500">Jun 15, 2026 • Enc #ENC-20260615-004</span>
+                </div>
+                <span class="text-xs text-slate-400">Signed by Dr. Priya Sharma</span>
+              </div>
+              <div class="space-y-2 text-xs">
+                <div><strong class="text-slate-900">Assessment:</strong> Type 2 Diabetes with elevated glycemic marker. Moderate essential hypertension.</div>
+                <div><strong class="text-slate-900">Plan:</strong> Maintain Metformin at 850mg BID. Added Lisinopril 10mg daily for nephroprotection and BP control. Recheck HbA1c in October.</div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+
+      <!-- Right Column: Persistent Problem List & Medications (4 cols) -->
+      <div class="lg:col-span-4 space-y-4">
+        
+        <!-- Active Problem List -->
+        <div class="bg-white rounded-xl p-5 border border-slate-200 shadow-sm">
+          <h3 class="font-bold text-slate-900 text-sm mb-3">Active Clinical Problems</h3>
+          <div class="space-y-2 text-xs">
+            <div class="p-2.5 rounded-lg bg-slate-50 border border-slate-100 flex items-center justify-between">
+              <div>
+                <span class="font-bold text-slate-900">Type 2 Diabetes Mellitus</span>
+                <span class="block text-[11px] text-slate-500">ICD-10: E11.9 • Since 2022</span>
+              </div>
+              <span class="px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 font-semibold text-[10px]">Chronic</span>
+            </div>
+            <div class="p-2.5 rounded-lg bg-slate-50 border border-slate-100 flex items-center justify-between">
+              <div>
+                <span class="font-bold text-slate-900">Essential Hypertension</span>
+                <span class="block text-[11px] text-slate-500">ICD-10: I10 • Since 2023</span>
+              </div>
+              <span class="px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 font-semibold text-[10px]">Chronic</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Active Medications Summary -->
+        <div class="bg-white rounded-xl p-5 border border-slate-200 shadow-sm">
+          <h3 class="font-bold text-slate-900 text-sm mb-3">Active Regimen</h3>
+          <div class="space-y-2 text-xs">
+            <div class="p-2.5 rounded-lg bg-slate-50 border border-slate-100">
+              <div class="font-bold text-slate-900">Metformin HCl 850mg</div>
+              <div class="text-[11px] text-slate-500">Oral Tablet • 1 tab BID with meals</div>
+            </div>
+            <div class="p-2.5 rounded-lg bg-slate-50 border border-slate-100">
+              <div class="font-bold text-slate-900">Lisinopril 10mg</div>
+              <div class="text-[11px] text-slate-500">Oral Tablet • 1 tab QD every morning</div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+    </main>
+  </div>
+
+</body>
+</html>
