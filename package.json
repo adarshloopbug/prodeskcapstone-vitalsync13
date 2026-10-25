@@ -1,0 +1,26 @@
+{
+  "name": "prodesk-capstone-vitalsync",
+  "version": "1.0.0",
+  "description": "VitalSync Fullstack Enterprise Hospital Management & EHR Platform - Track B Secure Authentication & JWT Integration",
+  "scripts": {
+    "dev:server": "npm --prefix server run dev",
+    "dev:client": "npm --prefix client run dev",
+    "start:server": "npm --prefix server start",
+    "build:client": "npm --prefix client run build",
+    "test:server": "npm --prefix server test",
+    "test": "npm run test:server"
+  },
+  "keywords": [
+    "vitalsync",
+    "healthcare",
+    "authentication",
+    "jwt",
+    "bcryptjs",
+    "mongoose",
+    "express",
+    "react",
+    "fullstack"
+  ],
+  "author": "VitalSync Fullstack Engineering Team",
+  "license": "MIT"
+}
