@@ -4,6 +4,7 @@ const { connectDB } = require('./config/db');
 const User = require('./models/User');
 const authRoutes = require('./routes/authRoutes');
 const taskRoutes = require('./routes/taskRoutes');
+const paymentRoutes = require('./routes/paymentRoutes');
 
 const app = express();
 
@@ -73,6 +74,7 @@ app.use(async (req, res, next) => {
 // API Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/tasks', taskRoutes);
+app.use('/api/payment', paymentRoutes);
 
 // System Health & Information Route
 app.get('/api/health', (req, res) => {

@@ -39,6 +39,15 @@ const userSchema = new mongoose.Schema(
         message: '{VALUE} is not a valid role'
       },
       default: 'PATIENT'
+    },
+    plan: {
+      type: String,
+      enum: ['FREE', 'PRO', 'ENTERPRISE'],
+      default: 'FREE'
+    },
+    stripeCustomerId: {
+      type: String,
+      default: null
     }
   },
   {

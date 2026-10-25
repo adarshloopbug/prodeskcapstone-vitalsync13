@@ -146,9 +146,13 @@ export const authAPI = {
 };
 
 export const tasksAPI = {
-  // Phase 3 Protected data endpoint
+  // Phase 1 & 2 Protected CRUD endpoints
   getAll: async () => {
     return apiFetch('/api/tasks');
+  },
+
+  getById: async (id) => {
+    return apiFetch(`/api/tasks/${id}`);
   },
 
   create: async (taskData) => {
@@ -171,3 +175,25 @@ export const tasksAPI = {
     });
   }
 };
+
+export const paymentAPI = {
+  // Phase 3 Monetization Architecture (Stripe Test Mode)
+  getPlans: async () => {
+    return apiFetch('/api/payment/plans');
+  },
+
+  createCheckoutSession: async (planId = 'PRO') => {
+    return apiFetch('/api/payment/create-checkout-session', {
+      method: 'POST',
+      body: JSON.stringify({
+        planId,
+        clientBaseUrl: window.location.origin
+      })
+    });
+  },
+
+  verifySession: async (sessionId, plan = 'PRO') => {
+    return apiFetch(`/api/payment/verify-session/${sessionId}?plan=${plan}`);
+  }
+};
+

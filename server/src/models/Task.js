@@ -39,18 +39,35 @@ const taskSchema = new mongoose.Schema(
     },
     dueDate: {
       type: Date,
-      default: () => new Date(Date.now() + 24 * 60 * 60 * 1000) // Default 24h from now
+      default: () => new Date(Date.now() + 24 * 60 * 60 * 1000)
+    },
+    authorId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User'
     },
     userId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'User',
-      required: [true, 'Task must belong to an authenticated user']
+      ref: 'User'
     }
   },
   {
     timestamps: true
   }
 );
+
+// Bidirectional synchronization between authorId and userId for backwards compatibility
+taskSchema.pre('validate', function (next) {
+  if (!this.authorId && this.userId) {
+    this.authorId = this.userId;
+  }
+  if (!this.userId && this.authorId) {
+    this.userId = this.authorId;
+  }
+  if (!this.authorId && !this.userId) {
+    return next(new Error('Task must have an authorId'));
+  }
+  next();
+});
 
 taskSchema.set('toJSON', {
   transform: (doc, ret) => {

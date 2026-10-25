@@ -6,6 +6,8 @@ import ProtectedRoute from './components/ProtectedRoute';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import DashboardPage from './pages/DashboardPage';
+import PaymentSuccessPage from './pages/PaymentSuccessPage';
+import PaymentCancelPage from './pages/PaymentCancelPage';
 
 function HomeRedirect() {
   const { isAuthenticated, loading } = useAuth();
@@ -29,6 +31,22 @@ export default function App() {
                 element={
                   <ProtectedRoute>
                     <DashboardPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/payment/success"
+                element={
+                  <ProtectedRoute>
+                    <PaymentSuccessPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/payment/cancel"
+                element={
+                  <ProtectedRoute>
+                    <PaymentCancelPage />
                   </ProtectedRoute>
                 }
               />
