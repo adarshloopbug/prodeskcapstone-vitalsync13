@@ -67,4 +67,6 @@ if (require.main === module) {
   bootstrap();
 }
 
-module.exports = { bootstrap };
+module.exports = app;
+module.exports.bootstrap = bootstrap;
+
