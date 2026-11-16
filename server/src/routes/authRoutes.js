@@ -2,6 +2,8 @@ const express = require('express');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const { verifyToken } = require('../middleware/authMiddleware');
+const { validateBody, registerSchema, loginSchema } = require('../middleware/validate');
+const { loginLimiter } = require('../middleware/rateLimiter');
 
 const router = express.Router();
 
@@ -26,38 +28,24 @@ function generateToken(user) {
 
 /**
  * @route   POST /api/auth/register
- * @desc    Register a new user, hashes password with bcryptjs, and returns JWT
+ * @desc    Register a new user with Zod schema validation (Phase 1)
  * @access  Public
  */
-router.post('/register', async (req, res) => {
+router.post('/register', validateBody(registerSchema), async (req, res, next) => {
   try {
     const { name, email, password, role } = req.body;
 
-    // 1. Validate required inputs
-    if (!name || !email || !password) {
-      return res.status(400).json({
-        success: false,
-        message: 'Name, email, and password are all required.'
-      });
-    }
-
-    if (password.length < 8) {
-      return res.status(400).json({
-        success: false,
-        message: 'Password must be at least 8 characters long.'
-      });
-    }
-
-    // 2. Check for duplicate email
+    // Duplicate email check
     const existingUser = await User.findOne({ email: email.toLowerCase().trim() });
     if (existingUser) {
       return res.status(409).json({
         success: false,
+        code: 'CONFLICT',
         message: 'An account with this email address already exists.'
       });
     }
 
-    // 3. Create user (password is salted & hashed via User pre-save hook)
+    // Create user (password is salted & hashed via User pre-save hook)
     const user = new User({
       name: name.trim(),
       email: email.toLowerCase().trim(),
@@ -67,7 +55,6 @@ router.post('/register', async (req, res) => {
 
     await user.save();
 
-    // 4. Generate JWT upon successful registration
     const token = generateToken(user);
 
     return res.status(201).json({
@@ -83,9 +70,9 @@ router.post('/register', async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Registration error:', error);
     return res.status(500).json({
       success: false,
+      code: 'REGISTRATION_FAILED',
       message: error.message || 'Internal server error during registration.'
     });
   }
@@ -93,40 +80,31 @@ router.post('/register', async (req, res) => {
 
 /**
  * @route   POST /api/auth/login
- * @desc    Authenticate user against bcryptjs password hash and return JWT
+ * @desc    Authenticate user with rate limiting (Phase 3) and Zod validation (Phase 1)
  * @access  Public
  */
-router.post('/login', async (req, res) => {
+router.post('/login', loginLimiter, validateBody(loginSchema), async (req, res, next) => {
   try {
     const { email, password } = req.body;
 
-    // 1. Validate presence of credentials
-    if (!email || !password) {
-      return res.status(400).json({
-        success: false,
-        message: 'Please provide both email and password.'
-      });
-    }
-
-    // 2. Lookup user and explicitly include password hash
     const user = await User.findOne({ email: email.toLowerCase().trim() }).select('+password');
     if (!user) {
       return res.status(401).json({
         success: false,
+        code: 'INVALID_CREDENTIALS',
         message: 'Invalid email or password.'
       });
     }
 
-    // 3. Cryptographically verify password hash using bcryptjs
     const isMatch = await user.comparePassword(password);
     if (!isMatch) {
       return res.status(401).json({
         success: false,
+        code: 'INVALID_CREDENTIALS',
         message: 'Invalid email or password.'
       });
     }
 
-    // 4. Issue signed JWT
     const token = generateToken(user);
 
     return res.status(200).json({
@@ -138,13 +116,14 @@ router.post('/login', async (req, res) => {
         name: user.name,
         email: user.email,
         role: user.role,
+        plan: user.plan || 'FREE',
         createdAt: user.createdAt
       }
     });
   } catch (error) {
-    console.error('Login error:', error);
     return res.status(500).json({
       success: false,
+      code: 'AUTHENTICATION_FAILED',
       message: error.message || 'Internal server error during authentication.'
     });
   }
@@ -155,12 +134,13 @@ router.post('/login', async (req, res) => {
  * @desc    Get current authenticated user profile
  * @access  Protected (Requires valid JWT)
  */
-router.get('/me', verifyToken, async (req, res) => {
+router.get('/me', verifyToken, async (req, res, next) => {
   try {
     const user = await User.findById(req.user.id);
     if (!user) {
       return res.status(404).json({
         success: false,
+        code: 'NOT_FOUND',
         message: 'User profile not found.'
       });
     }
@@ -170,65 +150,11 @@ router.get('/me', verifyToken, async (req, res) => {
       user
     });
   } catch (error) {
-    console.error('Profile fetch error:', error);
     return res.status(500).json({
       success: false,
+      code: 'PROFILE_FETCH_FAILED',
       message: 'Failed to retrieve user profile.'
     });
-  }
-});
-
-/**
- * @route   POST /api/auth/seed-demo-users
- * @desc    Seeds default demo accounts for testing all clinical roles
- * @access  Public
- */
-router.post('/seed-demo-users', async (req, res) => {
-  try {
-    const demoAccounts = [
-      {
-        name: 'Rajesh Patel',
-        email: 'rajesh.patel@example.com',
-        password: 'Password123!',
-        role: 'PATIENT'
-      },
-      {
-        name: 'Dr. Priya Sharma',
-        email: 'dr.priya.sharma@vitalsync.health',
-        password: 'Password123!',
-        role: 'DOCTOR'
-      },
-      {
-        name: 'Ananya Sen (RN)',
-        email: 'ananya.sen@vitalsync.health',
-        password: 'Password123!',
-        role: 'STAFF'
-      },
-      {
-        name: 'Victoria Sterling',
-        email: 'admin@vitalsync.health',
-        password: 'Password123!',
-        role: 'ADMIN'
-      }
-    ];
-
-    const results = [];
-    for (const acc of demoAccounts) {
-      let existing = await User.findOne({ email: acc.email });
-      if (!existing) {
-        existing = await User.create(acc);
-      }
-      results.push({ email: existing.email, role: existing.role });
-    }
-
-    return res.status(200).json({
-      success: true,
-      message: 'Demo accounts verified/seeded successfully.',
-      accounts: results
-    });
-  } catch (error) {
-    console.error('Seed demo error:', error);
-    return res.status(500).json({ success: false, message: error.message });
   }
 });
 

@@ -197,3 +197,18 @@ export const paymentAPI = {
   }
 };
 
+export const aiAPI = {
+  // Phase 2: Server-Side AI Microservice Integration
+  getStatus: async () => {
+    return apiFetch('/api/ai/status');
+  },
+
+  suggest: async ({ prompt, context, category = 'GENERAL' }) => {
+    return apiFetch('/api/ai/suggest', {
+      method: 'POST',
+      body: JSON.stringify({ prompt, context, category })
+    });
+  }
+};
+
+

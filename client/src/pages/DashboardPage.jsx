@@ -1,35 +1,31 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { tasksAPI, paymentAPI, parseJwt } from '../services/api';
+import { tasksAPI, paymentAPI, aiAPI, parseJwt } from '../services/api';
 import {
   Shield,
-  Key,
-  Clock,
-  User,
   Plus,
   Trash2,
-  CheckCircle,
-  Clock3,
   AlertTriangle,
   RefreshCw,
-  Bug,
   Lock,
   Layers,
-  Activity,
-  FileText,
   CreditCard,
   Sparkles,
   Edit3,
   Eye,
   CheckCircle2,
   Zap,
-  Building2,
-  ShieldCheck,
-  ChevronRight
+  Bot,
+  Send,
+  Stethoscope,
+  ClipboardList,
+  CheckCircle,
+  HelpCircle,
+  ArrowRight
 } from 'lucide-react';
 
 export default function DashboardPage() {
-  const { user, token, logout, simulateExpiredToken, simulateTamperedToken } = useAuth();
+  const { user, token, logout } = useAuth();
   const [tasks, setTasks] = useState([]);
   const [loadingTasks, setLoadingTasks] = useState(true);
   const [taskError, setTaskError] = useState('');
@@ -52,13 +48,21 @@ export default function DashboardPage() {
     description: ''
   });
 
-  // New task form state
+  // New task form state (Clean - zero preseeded defaults)
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [newTaskCategory, setNewTaskCategory] = useState('CLINICAL');
   const [newTaskPriority, setNewTaskPriority] = useState('MEDIUM');
-  const [newTaskPatient, setNewTaskPatient] = useState('Rajesh Patel');
+  const [newTaskPatient, setNewTaskPatient] = useState('');
   const [newTaskDescription, setNewTaskDescription] = useState('');
   const [submittingTask, setSubmittingTask] = useState(false);
+
+  // AI Microservice State (Phase 2)
+  const [aiPrompt, setAiPrompt] = useState('');
+  const [aiCategory, setAiCategory] = useState('DIAGNOSIS');
+  const [aiContext, setAiContext] = useState('');
+  const [aiResult, setAiResult] = useState(null);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState('');
 
   // Payment / Upgrade state
   const [upgradingPlan, setUpgradingPlan] = useState(false);
@@ -66,22 +70,6 @@ export default function DashboardPage() {
 
   // Decoded JWT inspection
   const decodedToken = parseJwt(token);
-  const [secondsRemaining, setSecondsRemaining] = useState(null);
-
-  // Countdown timer for JWT
-  useEffect(() => {
-    if (!decodedToken || !decodedToken.exp) return;
-
-    const updateRemaining = () => {
-      const now = Math.floor(Date.now() / 1000);
-      const diff = decodedToken.exp - now;
-      setSecondsRemaining(diff > 0 ? diff : 0);
-    };
-
-    updateRemaining();
-    const interval = setInterval(updateRemaining, 1000);
-    return () => clearInterval(interval);
-  }, [decodedToken]);
 
   // Load tasks from protected backend endpoint (GET /api/tasks)
   const loadTasks = async () => {
@@ -101,7 +89,7 @@ export default function DashboardPage() {
     loadTasks();
   }, []);
 
-  // Handle task creation (POST /api/tasks)
+  // Handle task creation (POST /api/tasks with Zod schema validation)
   const handleCreateTask = async (e) => {
     e.preventDefault();
     if (!newTaskTitle.trim()) return;
@@ -112,12 +100,13 @@ export default function DashboardPage() {
         title: newTaskTitle.trim(),
         category: newTaskCategory,
         priority: newTaskPriority,
-        patientName: newTaskPatient.trim(),
+        patientName: newTaskPatient.trim() || 'General',
         description: newTaskDescription.trim()
       });
 
       // Reset form & reload
       setNewTaskTitle('');
+      setNewTaskPatient('');
       setNewTaskDescription('');
       setShowAddModal(false);
       await loadTasks();
@@ -128,7 +117,7 @@ export default function DashboardPage() {
     }
   };
 
-  // View Task Details (GET /api/tasks/:id) - Ownership Verified
+  // Inspect Task Details (GET /api/tasks/:id) - Ownership Verified
   const handleInspectTask = async (taskId) => {
     try {
       setTaskError('');
@@ -154,7 +143,7 @@ export default function DashboardPage() {
     setShowEditModal(true);
   };
 
-  // Save Task Update (PUT /api/tasks/:id) - Ownership Verified
+  // Save Task Update (PUT /api/tasks/:id)
   const handleSaveEdit = async (e) => {
     e.preventDefault();
     if (!selectedTask) return;
@@ -163,7 +152,6 @@ export default function DashboardPage() {
       setSubmittingTask(true);
       const res = await tasksAPI.update(selectedTask.id || selectedTask._id, editFormData);
       
-      // Update local state
       setTasks(prev => prev.map(t => (t.id === selectedTask.id || t._id === selectedTask._id) ? res.task : t));
       setShowEditModal(false);
       setSelectedTask(null);
@@ -179,44 +167,69 @@ export default function DashboardPage() {
     const nextStatus = task.status === 'COMPLETED' ? 'PENDING' : 'COMPLETED';
     const taskId = task.id || task._id;
     try {
-      // Optimistic update
       setTasks(prev => prev.map(t => (t.id === taskId || t._id === taskId) ? { ...t, status: nextStatus } : t));
       await tasksAPI.update(taskId, { status: nextStatus });
     } catch (err) {
-      await loadTasks(); // Revert on failure
+      await loadTasks();
     }
   };
 
-  /**
-   * OPTIMISTIC UI DELETION (Phase 2 Requirement)
-   * "When a user deletes an object, do not wait for the backend response or trigger a page reload.
-   * Utilize your state setter to filter the object out of the DOM array instantly, while the
-   * asynchronous API call resolves in the background."
-   */
+  // Optimistic UI Deletion (Phase 2 Requirement)
   const handleDeleteTaskOptimistic = (id) => {
-    // 1. Snapshot previous state for rollback if network/ownership error occurs
     const previousTasks = [...tasks];
 
-    // 2. Instantly filter object out of DOM array using state setter (Zero Delay)
+    // Instantly filter object out of DOM array using state setter (Zero Delay)
     setTasks(prev => prev.filter(t => (t.id || t._id) !== id));
     
-    // Visual indicator of optimistic state mutation
     setOptimisticNotice(`⚡ Optimistic UI: Task filtered from DOM instantly. Resolving DELETE /api/tasks/${id} asynchronously in background...`);
     setTimeout(() => setOptimisticNotice(''), 4500);
 
-    // 3. Asynchronous API call resolves in the background without blocking the UI
+    // Asynchronous API call resolves in the background without blocking the UI
     tasksAPI.delete(id).catch(err => {
-      console.error('Optimistic delete rejected by server:', err);
-      // Revert state if unauthorized (e.g. 403 Forbidden) or network error
-      setTasks(previousTasks);
+      setTasks(previousTasks); // Rollback on error
       setTaskError(`Delete failed: ${err.message}. Optimistic state reverted.`);
     });
   };
 
-  /**
-   * MONETIZATION PIPELINE (Phase 3 Requirement)
-   * Triggers Stripe Checkout pipeline for subscription upgrade
-   */
+  // Phase 2: Execute Server-Side AI Microservice
+  const handleExecuteAI = async (e) => {
+    e.preventDefault();
+    if (!aiPrompt.trim()) return;
+
+    try {
+      setAiLoading(true);
+      setAiError('');
+      setAiResult(null);
+
+      const response = await aiAPI.suggest({
+        prompt: aiPrompt.trim(),
+        context: aiContext.trim() || undefined,
+        category: aiCategory
+      });
+
+      if (response.success && response.data) {
+        setAiResult(response.data);
+      } else {
+        throw new Error(response.message || 'No AI suggestion returned');
+      }
+    } catch (err) {
+      setAiError(err.message || 'AI microservice request failed. Please check rate limit or input format.');
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+  // Convert AI Recommendation into a Clinical Task with one click
+  const handleCreateTaskFromAI = () => {
+    if (!aiResult) return;
+    setNewTaskTitle(`Clinical Follow-up: ${aiResult.category}`);
+    setNewTaskDescription(`${aiResult.suggestion}\n\nKey Actions:\n${(aiResult.recommendations || []).map(r => `• ${r}`).join('\n')}`);
+    setNewTaskCategory('CLINICAL');
+    setNewTaskPriority('HIGH');
+    setShowAddModal(true);
+  };
+
+  // Monetization Checkout Trigger
   const handleTriggerCheckout = async (planId) => {
     try {
       setUpgradingPlan(true);
@@ -224,7 +237,6 @@ export default function DashboardPage() {
       
       const res = await paymentAPI.createCheckoutSession(planId);
       if (res.url) {
-        // Direct redirect to Stripe Checkout or verified success route
         window.location.href = res.url;
       } else {
         throw new Error('No checkout URL received from gateway.');
@@ -245,36 +257,28 @@ export default function DashboardPage() {
     }
   };
 
-  const formatSeconds = (sec) => {
-    if (sec === null) return 'Calculating...';
-    if (sec <= 0) return 'Expired';
-    const m = Math.floor(sec / 60);
-    const s = sec % 60;
-    return `${m}m ${s < 10 ? '0' : ''}${s}s`;
-  };
-
   return (
     <div className="dashboard-viewport">
-      {/* Hero Welcome & Plan Tier Banner */}
+      {/* Clean Modern Header Banner */}
       <div className="dashboard-hero">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '16px' }}>
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '12px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '8px' }}>
               <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '4px 10px', background: 'rgba(13, 148, 136, 0.2)', color: '#5eead4', borderRadius: '9999px', fontSize: '11px', fontWeight: 700 }}>
                 <Shield size={12} />
-                <span>JWT DATA OWNERSHIP PIPELINE (P0)</span>
+                <span>JWT OWNERSHIP ENFORCED</span>
               </div>
               <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '4px 10px', background: 'rgba(56, 189, 248, 0.2)', color: '#bae6fd', borderRadius: '9999px', fontSize: '11px', fontWeight: 700 }}>
-                <Sparkles size={12} />
-                <span>TIER: {user?.plan || 'PRO CLINICAL'}</span>
+                <Bot size={12} />
+                <span>SERVER-SIDE AI ACTIVE</span>
               </div>
             </div>
 
             <h1 className="dashboard-hero-title">
-              Welcome back, {user?.name || 'Healthcare Practitioner'}
+              {user?.name || 'Healthcare Practitioner Workspace'}
             </h1>
             <p className="dashboard-hero-sub">
-              Role: <strong style={{ color: '#fff' }}>{user?.role}</strong> • Email: <strong style={{ color: '#fff' }}>{user?.email}</strong> • User ID: <code style={{ color: '#5eead4', fontSize: '11px' }}>{decodedToken?.id}</code>
+              Role: <strong style={{ color: '#fff' }}>{user?.role || 'DOCTOR'}</strong> • Email: <strong style={{ color: '#fff' }}>{user?.email}</strong> • User ID: <code style={{ color: '#5eead4', fontSize: '11px' }}>{decodedToken?.id}</code>
             </p>
           </div>
 
@@ -282,8 +286,8 @@ export default function DashboardPage() {
             <button onClick={() => setShowUpgradeModal(true)} className="btn btn-secondary btn-sm" style={{ background: 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)', color: '#fff', border: 'none' }}>
               <CreditCard size={14} /> Upgrade Plan (Stripe)
             </button>
-            <button onClick={loadTasks} className="btn btn-secondary btn-sm" title="Refresh protected data">
-              <RefreshCw size={14} /> Refresh Pipeline
+            <button onClick={loadTasks} className="btn btn-secondary btn-sm" title="Refresh tasks">
+              <RefreshCw size={14} /> Refresh
             </button>
             <button onClick={() => setShowAddModal(true)} className="btn btn-primary btn-sm">
               <Plus size={14} /> New Clinical Task
@@ -300,91 +304,139 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* Phase 3 Live JWT Inspector & Security Cockpit */}
-      <div className="token-inspector-card">
-        <div className="inspector-header">
-          <div className="inspector-title">
-            <Lock size={16} color="#0d9488" />
-            <span>Track B Security & Architecture Cockpit: 403 Data Ownership Enforced</span>
-          </div>
-          {user?.role !== 'PATIENT' && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-              <span style={{ fontSize: '12px', color: '#64748b' }}>Simulate Auth Interceptions:</span>
-              <button
-                onClick={simulateExpiredToken}
-                className="btn btn-secondary btn-sm"
-                title="Expire token to trigger automatic redirect to /login"
-              >
-                <Clock size={12} /> Test Token Expiry
-              </button>
-              <button
-                onClick={async () => {
-                  simulateTamperedToken();
-                  try {
-                    await tasksAPI.getAll();
-                  } catch (e) {
-                    // Interceptor catches and redirects
-                  }
-                }}
-                className="btn btn-secondary btn-sm"
-                title="Tamper signature to trigger 401 client interceptor"
-              >
-                <Bug size={12} /> Test Tampered Token
-              </button>
+      {/* Phase 2: Dedicated Server-Side AI Clinical Microservice Panel */}
+      <div className="tasks-container" style={{ marginBottom: '24px', borderLeft: '4px solid #0d9488' }}>
+        <div className="tasks-header" style={{ marginBottom: '16px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <div style={{ width: '36px', height: '36px', borderRadius: '8px', background: 'rgba(13, 148, 136, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#0d9488' }}>
+              <Bot size={22} />
             </div>
-          )}
+            <div>
+              <h2 style={{ fontSize: '17px', fontWeight: 800, color: '#0f172a', margin: 0 }}>
+                Server-Side AI Clinical Decision Support
+              </h2>
+              <p style={{ fontSize: '12px', color: '#64748b', margin: '2px 0 0' }}>
+                Secure server-side LLM execution utilizing <code>POST /api/ai/suggest</code>. Protected against DDoS with rate limits & zero client key exposure.
+              </p>
+            </div>
+          </div>
+          <span className="badge badge-teal" style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+            <Sparkles size={11} /> Google Gemini AI
+          </span>
         </div>
 
-        {/* Raw Token string preview */}
-        <div className="token-preview">
-          <div style={{ color: '#94a3b8', fontSize: '10px', textTransform: 'uppercase', marginBottom: '4px', letterSpacing: '0.05em' }}>
-            Authorization Header: Bearer [localStorage.getItem('vitalsync_token')]
+        {aiError && (
+          <div className="alert alert-danger" style={{ marginBottom: '14px' }}>
+            <AlertTriangle size={16} />
+            <div>{aiError}</div>
           </div>
-          <code>{token || 'No active token'}</code>
-        </div>
+        )}
 
-        {/* Decoded Token Claims Grid */}
-        <div className="inspector-grid">
-          <div className="inspector-item">
-            <div className="inspector-item-label">Decoded userId (authorId validation)</div>
-            <div className="inspector-item-val" style={{ fontFamily: 'monospace', fontSize: '12px' }}>
-              {decodedToken?.id || '—'}
+        <form onSubmit={handleExecuteAI}>
+          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '12px', marginBottom: '12px' }}>
+            <div>
+              <label className="form-label">Clinical Scenario / Symptoms / Case Notes</label>
+              <input
+                type="text"
+                className="form-input"
+                placeholder="e.g. 58yo patient with acute ST-segment elevation on V2-V4 telemetry..."
+                value={aiPrompt}
+                onChange={(e) => setAiPrompt(e.target.value)}
+                required
+              />
+            </div>
+            <div>
+              <label className="form-label">Clinical Category</label>
+              <select
+                className="form-input"
+                value={aiCategory}
+                onChange={(e) => setAiCategory(e.target.value)}
+              >
+                <option value="DIAGNOSIS">Diagnosis & ECG</option>
+                <option value="PRESCRIPTION">Prescription & Interaction</option>
+                <option value="TRIAGE">Triage & Vitals</option>
+                <option value="FOLLOW_UP">Follow-up Protocol</option>
+                <option value="GENERAL">General Clinical Support</option>
+              </select>
             </div>
           </div>
-          <div className="inspector-item">
-            <div className="inspector-item-label">Claim: Role (RBAC)</div>
-            <div className="inspector-item-val" style={{ color: '#0d9488' }}>
-              {decodedToken?.role || '—'}
+
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+            <button
+              type="submit"
+              className="btn btn-primary btn-sm"
+              disabled={aiLoading || !aiPrompt.trim()}
+              style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+            >
+              {aiLoading ? (
+                <>Processing Server-Side LLM...</>
+              ) : (
+                <>
+                  <Send size={13} />
+                  <span>Analyze with Gemini AI</span>
+                </>
+              )}
+            </button>
+          </div>
+        </form>
+
+        {/* AI Output Card */}
+        {aiResult && (
+          <div style={{ marginTop: '16px', background: '#f8fafc', padding: '16px', borderRadius: '10px', border: '1px solid #cbd5e1' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <CheckCircle2 size={16} color="#059669" />
+                <strong style={{ fontSize: '13px', color: '#0f172a' }}>
+                  Clinical Decision Recommendation ({aiResult.category})
+                </strong>
+              </div>
+              <button
+                type="button"
+                onClick={handleCreateTaskFromAI}
+                className="btn btn-secondary btn-sm"
+                style={{ fontSize: '11px', padding: '4px 8px' }}
+              >
+                + Add as Clinical Task
+              </button>
+            </div>
+
+            <p style={{ fontSize: '13px', color: '#334155', lineHeight: '1.6', marginBottom: '12px', background: '#fff', padding: '12px', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
+              {aiResult.suggestion}
+            </p>
+
+            {aiResult.recommendations && aiResult.recommendations.length > 0 && (
+              <div style={{ marginBottom: '10px' }}>
+                <span style={{ fontSize: '11px', textTransform: 'uppercase', fontWeight: 700, color: '#64748b', display: 'block', marginBottom: '6px' }}>
+                  Recommended Action Protocol:
+                </span>
+                <ul style={{ fontSize: '12px', color: '#475569', paddingLeft: '18px', margin: 0, lineHeight: '1.6' }}>
+                  {aiResult.recommendations.map((rec, idx) => (
+                    <li key={idx}>{rec}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            <div style={{ fontSize: '10px', color: '#94a3b8', fontStyle: 'italic', borderTop: '1px solid #e2e8f0', paddingTop: '8px', marginTop: '8px' }}>
+              ⚠️ {aiResult.disclaimer} • Generated via {aiResult.model || 'Gemini'} at {new Date(aiResult.timestamp).toLocaleTimeString()}
             </div>
           </div>
-          <div className="inspector-item">
-            <div className="inspector-item-label">Monetization Tier</div>
-            <div className="inspector-item-val" style={{ color: '#0284c7' }}>
-              {user?.plan || 'PRO CLINICAL'}
-            </div>
-          </div>
-          <div className="inspector-item">
-            <div className="inspector-item-label">Expires In (exp countdown)</div>
-            <div className="inspector-item-val" style={{ color: secondsRemaining < 60 ? '#dc2626' : '#059669' }}>
-              {formatSeconds(secondsRemaining)}
-            </div>
-          </div>
-        </div>
+        )}
       </div>
 
-      {/* Protected Pipeline Data: Clinical Tasks (Full REST CRUD) */}
+      {/* Primary Clinical Tasks Table (Full REST CRUD + 403 Data Ownership) */}
       <div className="tasks-container">
         <div className="tasks-header">
           <div>
             <h2 style={{ fontSize: '18px', fontWeight: 800, color: '#0f172a' }}>
-              Protected Clinical CRUD & Data Ownership (/api/tasks)
+              Clinical Follow-ups & Tasks (/api/tasks)
             </h2>
             <p style={{ fontSize: '13px', color: '#64748b', marginTop: '2px' }}>
-              All routes (POST, GET, PUT, DELETE) validate that the document's <code>authorId</code> matches the decoded JWT <code>userId</code>. Non-owners receive <strong>403 Forbidden</strong>.
+              Protected with Zod schema validation (Phase 1) and 403 Forbidden ownership boundaries.
             </p>
           </div>
           <span className="badge badge-teal">
-            {tasks.length} {tasks.length === 1 ? 'Task' : 'Tasks'} Owned & Loaded
+            {tasks.length} {tasks.length === 1 ? 'Task' : 'Tasks'} Owned
           </span>
         </div>
 
@@ -406,14 +458,14 @@ export default function DashboardPage() {
               margin: '0 auto 12px',
               animation: 'spin 1s linear infinite'
             }} />
-            <p style={{ fontSize: '13px' }}>Executing cryptographically authenticated GET /api/tasks...</p>
+            <p style={{ fontSize: '13px' }}>Loading protected tasks...</p>
           </div>
         ) : tasks.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '48px', color: '#64748b', background: '#f8fafc', borderRadius: '12px', border: '1px dashed #cbd5e1' }}>
-            <Layers size={36} color="#94a3b8" style={{ margin: '0 auto 12px' }} />
-            <h3 style={{ fontSize: '16px', fontWeight: 700, color: '#334155' }}>No Clinical Tasks Logged</h3>
+            <ClipboardList size={36} color="#94a3b8" style={{ margin: '0 auto 12px' }} />
+            <h3 style={{ fontSize: '16px', fontWeight: 700, color: '#334155' }}>No Tasks Recorded</h3>
             <p style={{ fontSize: '13px', color: '#64748b', maxWidth: '400px', margin: '4px auto 16px' }}>
-              Create your first clinical task using the protected endpoint to verify your JWT write pipeline and ownership binding.
+              Create your first clinical task or generate one using the AI Clinical Decision Support panel above.
             </p>
             <button onClick={() => setShowAddModal(true)} className="btn btn-primary btn-sm">
               <Plus size={14} /> Add First Task
@@ -461,7 +513,7 @@ export default function DashboardPage() {
                     {task.status}
                   </span>
 
-                  {/* REST Action Buttons: View, Edit, Optimistic Delete */}
+                  {/* REST Actions: View, Edit, Optimistic Delete */}
                   <div style={{ display: 'flex', gap: '4px' }}>
                     <button
                       onClick={() => handleInspectTask(task.id || task._id)}
@@ -495,13 +547,13 @@ export default function DashboardPage() {
         )}
       </div>
 
-      {/* CREATE TASK MODAL (POST /api/tasks) */}
+      {/* CREATE TASK MODAL */}
       {showAddModal && (
         <div className="modal-backdrop" onClick={() => setShowAddModal(false)}>
           <div className="modal-dialog" onClick={(e) => e.stopPropagation()}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px' }}>
               <h3 style={{ fontSize: '18px', fontWeight: 800, color: '#0f172a' }}>
-                Add Clinical Task (POST /api/tasks)
+                Add Clinical Task (Zod Validated)
               </h3>
               <button
                 onClick={() => setShowAddModal(false)}
@@ -518,7 +570,7 @@ export default function DashboardPage() {
                   id="task-title"
                   type="text"
                   className="form-input"
-                  placeholder="e.g. Verify Metformin 850mg dosage with Dr. Sharma"
+                  placeholder="e.g. Verify Metformin dosage with pharmacy"
                   value={newTaskTitle}
                   onChange={(e) => setNewTaskTitle(e.target.value)}
                   required
@@ -531,7 +583,7 @@ export default function DashboardPage() {
                   id="task-patient"
                   type="text"
                   className="form-input"
-                  placeholder="e.g. Rajesh Patel"
+                  placeholder="e.g. John Doe"
                   value={newTaskPatient}
                   onChange={(e) => setNewTaskPatient(e.target.value)}
                 />
@@ -576,7 +628,7 @@ export default function DashboardPage() {
                   id="task-desc"
                   className="form-input"
                   rows={3}
-                  placeholder="Additional context for attending doctor or triage nurse..."
+                  placeholder="Additional context or notes..."
                   value={newTaskDescription}
                   onChange={(e) => setNewTaskDescription(e.target.value)}
                 />
@@ -595,7 +647,7 @@ export default function DashboardPage() {
                   className="btn btn-primary"
                   disabled={submittingTask}
                 >
-                  {submittingTask ? 'Creating...' : 'Create Owned Task'}
+                  {submittingTask ? 'Creating...' : 'Create Task'}
                 </button>
               </div>
             </form>
@@ -603,13 +655,13 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* EDIT TASK MODAL (PUT /api/tasks/:id) */}
+      {/* EDIT TASK MODAL */}
       {showEditModal && selectedTask && (
         <div className="modal-backdrop" onClick={() => setShowEditModal(false)}>
           <div className="modal-dialog" onClick={(e) => e.stopPropagation()}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px' }}>
               <h3 style={{ fontSize: '18px', fontWeight: 800, color: '#0f172a' }}>
-                Edit Clinical Task (PUT /api/tasks/:id)
+                Edit Clinical Task
               </h3>
               <button
                 onClick={() => setShowEditModal(false)}
@@ -709,7 +761,7 @@ export default function DashboardPage() {
                   className="btn btn-primary"
                   disabled={submittingTask}
                 >
-                  {submittingTask ? 'Saving...' : 'Save Updates (PUT)'}
+                  {submittingTask ? 'Saving...' : 'Save Updates'}
                 </button>
               </div>
             </form>
@@ -717,17 +769,14 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* VIEW / INSPECT TASK MODAL (GET /api/tasks/:id) */}
+      {/* VIEW / INSPECT TASK MODAL */}
       {showViewModal && selectedTask && (
         <div className="modal-backdrop" onClick={() => setShowViewModal(false)}>
           <div className="modal-dialog" onClick={(e) => e.stopPropagation()}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <ShieldCheck size={20} color="#0d9488" />
-                <h3 style={{ fontSize: '18px', fontWeight: 800, color: '#0f172a', margin: 0 }}>
-                  Task Inspection (GET /api/tasks/:id)
-                </h3>
-              </div>
+              <h3 style={{ fontSize: '18px', fontWeight: 800, color: '#0f172a', margin: 0 }}>
+                Task Details (Ownership Verified)
+              </h3>
               <button
                 onClick={() => setShowViewModal(false)}
                 style={{ background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', color: '#94a3b8' }}
@@ -737,7 +786,7 @@ export default function DashboardPage() {
             </div>
 
             <div style={{ background: '#f8fafc', padding: '16px', borderRadius: '8px', border: '1px solid #e2e8f0', marginBottom: '16px' }}>
-              <div style={{ fontSize: '11px', textTransform: 'uppercase', color: '#64748b', fontWeight: 700 }}>Task Title</div>
+              <div style={{ fontSize: '11px', textTransform: 'uppercase', color: '#64748b', fontWeight: 700 }}>Title</div>
               <div style={{ fontSize: '16px', fontWeight: 700, color: '#0f172a', marginTop: '2px' }}>{selectedTask.title}</div>
             </div>
 
@@ -762,7 +811,7 @@ export default function DashboardPage() {
 
             {selectedTask.description && (
               <div style={{ marginBottom: '20px' }}>
-                <span style={{ color: '#64748b', fontSize: '12px', display: 'block', marginBottom: '4px' }}>Clinical Description:</span>
+                <span style={{ color: '#64748b', fontSize: '12px', display: 'block', marginBottom: '4px' }}>Clinical Notes:</span>
                 <p style={{ fontSize: '13px', color: '#334155', background: '#ffffff', padding: '10px', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
                   {selectedTask.description}
                 </p>
@@ -777,22 +826,12 @@ export default function DashboardPage() {
               >
                 Close
               </button>
-              <button
-                type="button"
-                className="btn btn-primary"
-                onClick={() => {
-                  setShowViewModal(false);
-                  handleOpenEdit(selectedTask);
-                }}
-              >
-                Edit Task
-              </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* STRIPE MONETIZATION / UPGRADE MODAL (Phase 3 Requirement) */}
+      {/* STRIPE UPGRADE MODAL */}
       {showUpgradeModal && (
         <div className="modal-backdrop" onClick={() => setShowUpgradeModal(false)}>
           <div className="modal-dialog" style={{ maxWidth: '640px' }} onClick={(e) => e.stopPropagation()}>
@@ -810,10 +849,6 @@ export default function DashboardPage() {
                 &times;
               </button>
             </div>
-
-            <p style={{ fontSize: '13px', color: '#64748b', marginBottom: '20px' }}>
-              Select a tier below to initialize a Stripe Checkout session. In test mode, this securely executes the payment pipeline and redirects to a verified success route.
-            </p>
 
             {upgradeError && (
               <div className="alert alert-danger" style={{ marginBottom: '16px' }}>
@@ -842,9 +877,9 @@ export default function DashboardPage() {
                 </div>
                 <ul style={{ fontSize: '12px', color: '#475569', paddingLeft: '16px', marginBottom: '20px', lineHeight: '1.6' }}>
                   <li>Unlimited clinical tasks</li>
+                  <li>Gemini AI decision support</li>
                   <li>Real-time JWT interceptors</li>
-                  <li>Priority triage queue</li>
-                  <li>Continuous prescription sync</li>
+                  <li>Automated rate throttling</li>
                 </ul>
                 <button
                   onClick={() => handleTriggerCheckout('PRO')}
@@ -870,7 +905,7 @@ export default function DashboardPage() {
                 </div>
                 <ul style={{ fontSize: '12px', color: '#475569', paddingLeft: '16px', marginBottom: '20px', lineHeight: '1.6' }}>
                   <li>Everything in Pro Tier</li>
-                  <li>Multi-hospital clustering</li>
+                  <li>Multi-facility clustering</li>
                   <li>HIPAA audit logs & exports</li>
                   <li>Dedicated 24/7 Clinical SLA</li>
                 </ul>
@@ -883,10 +918,6 @@ export default function DashboardPage() {
                   {upgradingPlan ? 'Connecting...' : 'Enterprise Plan'}
                 </button>
               </div>
-            </div>
-
-            <div style={{ textAlign: 'center', fontSize: '11px', color: '#94a3b8' }}>
-              🔒 Powered by Stripe Checkout Pipeline • Test Mode Sandboxed • Zero Live Card Required
             </div>
           </div>
         </div>

@@ -23,20 +23,16 @@ async function connectDB() {
       // 1. Attempt connection to configured MONGODB_URI (e.g. Atlas in production)
       try {
         const conn = await mongoose.connect(uri, {
-          serverSelectionTimeoutMS: 2500 // Fast fail to in-memory if no daemon reachable
+          serverSelectionTimeoutMS: 2500 // Fast fail to in-memory if no local daemon reachable
         });
-        console.log(`[MongoDB] Connected to instance: ${conn.connection.host}/${conn.connection.name}`);
         cachedConn = conn;
         return conn;
       } catch (err) {
-        console.warn(`[MongoDB] Could not reach "${uri}" (${err.message}).`);
-        console.log('[MongoDB] Initializing in-memory fallback (mongodb-memory-server)...');
-
+        // Fallback to in-memory mongodb for sandbox/test environments
         try {
           const { MongoMemoryServer } = require('mongodb-memory-server');
           const serverOpts = {};
 
-          // Handle serverless / AWS Lambda read-only filesystem by redirecting binaries to /tmp
           if (process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME) {
             serverOpts.binary = { downloadDir: '/tmp/mongodb-binaries' };
             serverOpts.instance = { dbPath: '/tmp/mongo-mem-db' };
@@ -46,13 +42,11 @@ async function connectDB() {
           const memUri = mongoMemoryServer.getUri();
 
           const conn = await mongoose.connect(memUri);
-          console.log(`[MongoDB] In-memory database active at: ${memUri}`);
           cachedConn = conn;
           return conn;
         } catch (memErr) {
-          console.error('[MongoDB] In-memory fallback failed:', memErr.message);
           cachedPromise = null;
-          throw new Error('Database connection failed. Please provide a valid MONGODB_URI (e.g., MongoDB Atlas connection string).');
+          throw new Error('Database connection failed. Please provide a valid MONGODB_URI.');
         }
       }
     })();
@@ -72,6 +66,8 @@ async function disconnectDB() {
     await mongoMemoryServer.stop();
     mongoMemoryServer = null;
   }
+  cachedConn = null;
+  cachedPromise = null;
 }
 
 module.exports = { connectDB, disconnectDB };

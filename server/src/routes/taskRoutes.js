@@ -2,6 +2,7 @@ const express = require('express');
 const mongoose = require('mongoose');
 const Task = require('../models/Task');
 const { verifyToken } = require('../middleware/authMiddleware');
+const { validateBody, createTaskSchema, updateTaskSchema } = require('../middleware/validate');
 
 const router = express.Router();
 
@@ -30,7 +31,7 @@ function getDocumentAuthorId(task) {
  * @desc    Retrieve all clinical tasks owned by the authenticated user
  * @access  Protected (Requires Bearer JWT)
  */
-router.get('/', async (req, res) => {
+router.get('/', async (req, res, next) => {
   try {
     const currentUserId = req.user.id.toString();
     const tasks = await Task.find({
@@ -43,9 +44,9 @@ router.get('/', async (req, res) => {
       tasks
     });
   } catch (error) {
-    console.error('Error fetching tasks:', error);
     return res.status(500).json({
       success: false,
+      code: 'TASK_FETCH_ERROR',
       message: 'Failed to retrieve tasks.'
     });
   }
@@ -56,11 +57,12 @@ router.get('/', async (req, res) => {
  * @desc    Retrieve a single task by ID with strict ownership validation (P0)
  * @access  Protected (Requires Bearer JWT)
  */
-router.get('/:id', async (req, res) => {
+router.get('/:id', async (req, res, next) => {
   try {
     if (!isValidObjectId(req.params.id)) {
       return res.status(400).json({
         success: false,
+        code: 'INVALID_ID_FORMAT',
         message: 'Invalid task ID format.'
       });
     }
@@ -69,19 +71,21 @@ router.get('/:id', async (req, res) => {
     if (!task) {
       return res.status(404).json({
         success: false,
+        code: 'NOT_FOUND',
         message: 'Task not found.'
       });
     }
 
-    // Critical Ownership Validation (P0):
-    // Compare the document's authorId against the decoded userId extracted from the JWT token.
-    // Reject unauthorized attempts with a 403 Forbidden status.
+    // Critical Ownership Validation:
+    // Compare document authorId against decoded userId extracted from JWT token.
+    // Reject unauthorized attempts with 403 Forbidden.
     const authorId = getDocumentAuthorId(task);
     const currentUserId = req.user.id.toString();
 
     if (authorId !== currentUserId) {
       return res.status(403).json({
         success: false,
+        code: 'FORBIDDEN',
         message: 'Forbidden: You do not own this resource. Access denied.'
       });
     }
@@ -91,9 +95,9 @@ router.get('/:id', async (req, res) => {
       task
     });
   } catch (error) {
-    console.error('Error retrieving task:', error);
     return res.status(500).json({
       success: false,
+      code: 'TASK_RETRIEVAL_ERROR',
       message: 'Failed to retrieve task.'
     });
   }
@@ -101,20 +105,12 @@ router.get('/:id', async (req, res) => {
 
 /**
  * @route   POST /api/tasks
- * @desc    Create a new clinical task owned by the authenticated user
+ * @desc    Create a new clinical task with Zod schema validation (Phase 1)
  * @access  Protected (Requires Bearer JWT)
  */
-router.post('/', async (req, res) => {
+router.post('/', validateBody(createTaskSchema), async (req, res, next) => {
   try {
     const { title, description, priority, category, patientName, dueDate, status } = req.body;
-
-    if (!title || !title.trim()) {
-      return res.status(400).json({
-        success: false,
-        message: 'Task title is required.'
-      });
-    }
-
     const currentUserId = req.user.id;
 
     const task = new Task({
@@ -137,9 +133,9 @@ router.post('/', async (req, res) => {
       task
     });
   } catch (error) {
-    console.error('Error creating task:', error);
     return res.status(500).json({
       success: false,
+      code: 'TASK_CREATION_FAILED',
       message: error.message || 'Failed to create task.'
     });
   }
@@ -147,14 +143,15 @@ router.post('/', async (req, res) => {
 
 /**
  * @route   PUT /api/tasks/:id
- * @desc    Update task details (Owner-restricted with 403 Forbidden enforcement)
+ * @desc    Update task details with Zod schema validation and ownership check (Phase 1)
  * @access  Protected (Requires Bearer JWT)
  */
-router.put('/:id', async (req, res) => {
+router.put('/:id', validateBody(updateTaskSchema), async (req, res, next) => {
   try {
     if (!isValidObjectId(req.params.id)) {
       return res.status(400).json({
         success: false,
+        code: 'INVALID_ID_FORMAT',
         message: 'Invalid task ID format.'
       });
     }
@@ -163,19 +160,19 @@ router.put('/:id', async (req, res) => {
     if (!task) {
       return res.status(404).json({
         success: false,
+        code: 'NOT_FOUND',
         message: 'Task not found.'
       });
     }
 
-    // Critical Ownership Validation (P0):
-    // Compare the document's authorId against the decoded userId extracted from the JWT token.
-    // Reject unauthorized attempts with a 403 Forbidden status.
+    // Critical Ownership Validation:
     const authorId = getDocumentAuthorId(task);
     const currentUserId = req.user.id.toString();
 
     if (authorId !== currentUserId) {
       return res.status(403).json({
         success: false,
+        code: 'FORBIDDEN',
         message: 'Forbidden: You do not own this resource. Update denied.'
       });
     }
@@ -198,9 +195,9 @@ router.put('/:id', async (req, res) => {
       task
     });
   } catch (error) {
-    console.error('Error updating task:', error);
     return res.status(500).json({
       success: false,
+      code: 'TASK_UPDATE_FAILED',
       message: error.message || 'Failed to update task.'
     });
   }
@@ -208,14 +205,15 @@ router.put('/:id', async (req, res) => {
 
 /**
  * @route   DELETE /api/tasks/:id
- * @desc    Delete a task (Owner-restricted with 403 Forbidden enforcement)
+ * @desc    Delete a task with ownership enforcement (Phase 1)
  * @access  Protected (Requires Bearer JWT)
  */
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', async (req, res, next) => {
   try {
     if (!isValidObjectId(req.params.id)) {
       return res.status(400).json({
         success: false,
+        code: 'INVALID_ID_FORMAT',
         message: 'Invalid task ID format.'
       });
     }
@@ -224,19 +222,19 @@ router.delete('/:id', async (req, res) => {
     if (!task) {
       return res.status(404).json({
         success: false,
+        code: 'NOT_FOUND',
         message: 'Task not found.'
       });
     }
 
-    // Critical Ownership Validation (P0):
-    // Compare the document's authorId against the decoded userId extracted from the JWT token.
-    // Reject unauthorized attempts with a 403 Forbidden status.
+    // Critical Ownership Validation:
     const authorId = getDocumentAuthorId(task);
     const currentUserId = req.user.id.toString();
 
     if (authorId !== currentUserId) {
       return res.status(403).json({
         success: false,
+        code: 'FORBIDDEN',
         message: 'Forbidden: You do not own this resource. Deletion denied.'
       });
     }
@@ -249,9 +247,9 @@ router.delete('/:id', async (req, res) => {
       id: req.params.id
     });
   } catch (error) {
-    console.error('Error deleting task:', error);
     return res.status(500).json({
       success: false,
+      code: 'TASK_DELETION_FAILED',
       message: error.message || 'Failed to delete task.'
     });
   }

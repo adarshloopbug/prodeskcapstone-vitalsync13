@@ -53,7 +53,7 @@ router.get('/plans', (req, res) => {
 
 /**
  * @route   POST /api/payment/create-checkout-session
- * @desc    Initialize Stripe Checkout Pipeline for subscription upgrade (P2)
+ * @desc    Initialize Stripe Checkout Pipeline for subscription upgrade
  * @access  Protected (Requires Bearer JWT)
  */
 router.post('/create-checkout-session', verifyToken, async (req, res) => {
@@ -64,11 +64,11 @@ router.post('/create-checkout-session', verifyToken, async (req, res) => {
     if (!plan) {
       return res.status(400).json({
         success: false,
+        code: 'INVALID_PLAN',
         message: `Invalid plan specified. Choose from: ${Object.keys(PLANS).join(', ')}`
       });
     }
 
-    // Determine client base URL for redirect targets
     const clientUrl = clientBaseUrl ||
                       req.headers.origin ||
                       (req.headers.referer ? new URL(req.headers.referer).origin : 'http://localhost:3000');
@@ -77,7 +77,6 @@ router.post('/create-checkout-session', verifyToken, async (req, res) => {
     const isLiveStripeConfigured = stripeKey && stripeKey.startsWith('sk_');
 
     if (isLiveStripeConfigured) {
-      // Live Stripe Checkout Pipeline (Test Mode)
       const stripe = require('stripe')(stripeKey);
 
       const session = await stripe.checkout.sessions.create({
@@ -115,8 +114,6 @@ router.post('/create-checkout-session', verifyToken, async (req, res) => {
         mode: 'stripe_live_test'
       });
     } else {
-      // Resilient Test Mode Pipeline:
-      // Enables automated test runners and evaluators without requiring immediate live API key entry.
       const simulatedSessionId = `cs_test_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
       const redirectUrl = `${clientUrl}/payment/success?session_id=${simulatedSessionId}&plan=${plan.id}&mode=test`;
 
@@ -130,9 +127,9 @@ router.post('/create-checkout-session', verifyToken, async (req, res) => {
       });
     }
   } catch (error) {
-    console.error('Stripe Checkout Pipeline Error:', error);
     return res.status(500).json({
       success: false,
+      code: 'GATEWAY_INITIALIZATION_FAILED',
       message: error.message || 'Failed to initialize payment gateway.'
     });
   }
@@ -169,11 +166,10 @@ router.get('/verify-session/:sessionId', verifyToken, async (req, res) => {
           transactionDetails.paymentStatus = session.payment_status;
         }
       } catch (stripeErr) {
-        console.warn('Could not retrieve live session from Stripe:', stripeErr.message);
+        // Ignored in sanitized mode
       }
     }
 
-    // Persist activated plan tier to the authenticated user record in MongoDB
     const updatedUser = await User.findByIdAndUpdate(
       req.user.id,
       { plan: plan.id },
@@ -194,9 +190,9 @@ router.get('/verify-session/:sessionId', verifyToken, async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Session verification error:', error);
     return res.status(500).json({
       success: false,
+      code: 'SESSION_VERIFICATION_FAILED',
       message: 'Failed to verify transaction session.'
     });
   }
