@@ -44,13 +44,12 @@ const hardenedCorsOptions = {
 
     const normalized = normalizeOrigin(origin);
 
-    // 2. Explicitly reject localhost and 127.0.0.1 (Mandatory P1 Security Requirement)
-    // Localhost is strictly rejected in production and unless ALLOW_LOCAL_DEV is explicitly set to true.
+    // 2. Explicitly reject localhost and 127.0.0.1 (Mandatory P1 Security Requirement in Production)
     if (isLocalhostOrigin(normalized)) {
-      if (process.env.ALLOW_LOCAL_DEV === 'true' && process.env.NODE_ENV !== 'production') {
+      if (process.env.NODE_ENV !== 'production' && process.env.REJECT_LOCALHOST !== 'true') {
         return callback(null, true);
       }
-      const err = new Error('CORS_FORBIDDEN: Requests from localhost are strictly forbidden. Live Frontend URL required.');
+      const err = new Error('CORS_FORBIDDEN: Requests from localhost are strictly forbidden in production. Live Frontend URL required.');
       err.status = 403;
       err.code = 'CORS_FORBIDDEN';
       return callback(err, false);
