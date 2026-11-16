@@ -12,7 +12,7 @@ const router = express.Router();
  * @access  Public
  */
 router.get('/status', (req, res) => {
-  const hasGeminiKey = Boolean(process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY.startsWith('AIza'));
+  const hasGeminiKey = Boolean(process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY.trim() && process.env.GEMINI_API_KEY !== 'mock_key_for_testing');
   return res.status(200).json({
     success: true,
     service: 'VitalSync Server-Side AI Microservice',

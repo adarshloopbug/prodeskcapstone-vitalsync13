@@ -86,7 +86,7 @@ async function generateClinicalSuggestion({ prompt, context = '', category = 'GE
   const apiKey = process.env.GEMINI_API_KEY;
 
   // 1. Live Google Gemini SDK Execution if GEMINI_API_KEY is configured
-  if (apiKey && apiKey.startsWith('AIza') && apiKey !== 'mock_key_for_testing') {
+  if (apiKey && apiKey.trim() && apiKey !== 'mock_key_for_testing') {
     try {
       const genAI = new GoogleGenerativeAI(apiKey);
       const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
