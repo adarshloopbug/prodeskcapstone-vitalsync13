@@ -1,5 +1,6 @@
 const express = require('express');
 const cors = require('cors');
+const mongoose = require('mongoose');
 const { connectDB } = require('./config/db');
 const { hardenedCorsOptions } = require('./middleware/corsConfig');
 const authRoutes = require('./routes/authRoutes');
@@ -18,6 +19,11 @@ app.use(express.json({ limit: '1mb' }));
 // Database Connection Middleware for Serverless / Cloud Execution
 app.use(async (req, res, next) => {
   if (req.path === '/api/health') return next();
+
+  // Fast-path: if already connected to MongoDB, proceed instantly with zero overhead
+  if (mongoose.connection && mongoose.connection.readyState === 1) {
+    return next();
+  }
 
   try {
     await connectDB();
