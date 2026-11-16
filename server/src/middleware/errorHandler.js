@@ -4,7 +4,7 @@
  * and terminates unhandled fatal server crashes.
  */
 function errorHandler(err, req, res, next) {
-  const statusCode = err.statusCode || (res.statusCode && res.statusCode >= 400 ? res.statusCode : 500);
+  const statusCode = err.statusCode || err.status || (res.statusCode && res.statusCode >= 400 ? res.statusCode : 500);
 
   let errorCode = 'INTERNAL_SERVER_ERROR';
   if (statusCode === 400) errorCode = 'BAD_REQUEST';
@@ -12,6 +12,10 @@ function errorHandler(err, req, res, next) {
   else if (statusCode === 403) errorCode = 'FORBIDDEN';
   else if (statusCode === 404) errorCode = 'NOT_FOUND';
   else if (statusCode === 429) errorCode = 'RATE_LIMIT_EXCEEDED';
+
+  if (err.code === 'CORS_FORBIDDEN' || (err.message && err.message.startsWith('CORS_FORBIDDEN'))) {
+    errorCode = 'CORS_FORBIDDEN';
+  }
 
   const response = {
     success: false,

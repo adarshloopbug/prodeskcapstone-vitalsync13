@@ -20,10 +20,14 @@ async function connectDB() {
 
   if (!cachedPromise) {
     cachedPromise = (async () => {
-      // 1. Attempt connection to configured MONGODB_URI (e.g. Atlas in production)
+      // 1. Attempt connection to configured MONGODB_URI (e.g. Atlas cluster in production)
       try {
+        const isCloudCluster = uri.includes('mongodb+srv://') || uri.includes('mongodb.net');
+        const timeoutMs = isCloudCluster ? 10000 : 3000;
+
         const conn = await mongoose.connect(uri, {
-          serverSelectionTimeoutMS: 2500 // Fast fail to in-memory if no local daemon reachable
+          serverSelectionTimeoutMS: timeoutMs,
+          connectTimeoutMS: 10000
         });
         cachedConn = conn;
         return conn;

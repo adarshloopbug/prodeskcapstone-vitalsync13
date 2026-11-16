@@ -6,6 +6,9 @@
 const TOKEN_KEY = 'vitalsync_token';
 const USER_KEY = 'vitalsync_user';
 
+// Phase 3 (P2): Client Pipeline - Mutate VITE_API_URL to live backend URI in production
+export const API_BASE_URL = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '');
+
 /**
  * Decode JWT payload without external library
  */
@@ -59,7 +62,12 @@ export function forceRedirectToLogin(reason = 'expired') {
  * Unified API Request Client with Request & Response Interceptors
  */
 export async function apiFetch(endpoint, options = {}) {
-  const url = endpoint.startsWith('http') ? endpoint : endpoint;
+  // Resolve absolute URL or prepend live backend URL configured via VITE_API_URL
+  const formattedEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+  const url = endpoint.startsWith('http')
+    ? endpoint
+    : (API_BASE_URL ? `${API_BASE_URL}${formattedEndpoint}` : endpoint);
+
   const token = localStorage.getItem(TOKEN_KEY);
 
   const headers = {

@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const { connectDB } = require('./config/db');
+const { hardenedCorsOptions } = require('./middleware/corsConfig');
 const authRoutes = require('./routes/authRoutes');
 const taskRoutes = require('./routes/taskRoutes');
 const paymentRoutes = require('./routes/paymentRoutes');
@@ -9,12 +10,9 @@ const { errorHandler, notFoundHandler } = require('./middleware/errorHandler');
 
 const app = express();
 
-// Global Middlewares
-app.use(cors({
-  origin: '*',
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
-}));
+// Global Middlewares (Phase 2: Production CORS Hardening - Wildcard '*' deprecated)
+app.use(cors(hardenedCorsOptions));
+app.options('*', cors(hardenedCorsOptions));
 app.use(express.json({ limit: '1mb' }));
 
 // Database Connection Middleware for Serverless / Cloud Execution

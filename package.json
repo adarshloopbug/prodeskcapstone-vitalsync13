@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "VitalSync Fullstack Enterprise Hospital Management & EHR Platform - Track B Secure Authentication & JWT Integration",
   "scripts": {
+    "start": "node server/server.js",
     "dev:server": "npm --prefix server run dev",
     "dev:client": "npm --prefix client run dev",
     "start:server": "npm --prefix server start",
