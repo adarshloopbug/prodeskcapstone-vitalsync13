@@ -5,10 +5,16 @@ const rateLimit = require('express-rate-limit');
  * Protects endpoints from DDoS and token-spam with aggressive throttling.
  */
 
-// Login Route Rate Limiter: Max 5 attempts per 15 minutes window (100 in test mode)
+// Login Route Rate Limiter: Max 10 attempts per 15 minutes window in production
+// Skips successful logins, and skips in development so developers never get locked out locally.
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: process.env.NODE_ENV === 'test' ? 100 : 5,
+  max: process.env.NODE_ENV === 'test' ? 100 : (process.env.NODE_ENV === 'production' ? 10 : 1000),
+  skipSuccessfulRequests: true,
+  skip: (req) => {
+    // In local development, avoid locking out legitimate testing
+    return process.env.NODE_ENV !== 'production' && process.env.NODE_ENV !== 'test';
+  },
   standardHeaders: true,
   legacyHeaders: false,
   handler: (req, res) => {

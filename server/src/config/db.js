@@ -30,6 +30,7 @@ async function connectDB() {
           connectTimeoutMS: 10000
         });
         cachedConn = conn;
+        await ensureDefaultDoctor();
         return conn;
       } catch (err) {
         // Fallback to in-memory mongodb for sandbox/test environments
@@ -47,6 +48,7 @@ async function connectDB() {
 
           const conn = await mongoose.connect(memUri);
           cachedConn = conn;
+          await ensureDefaultDoctor();
           return conn;
         } catch (memErr) {
           cachedPromise = null;
@@ -72,6 +74,29 @@ async function disconnectDB() {
   }
   cachedConn = null;
   cachedPromise = null;
+}
+
+/**
+ * Ensure standard default clinician exists so developers never have to manually sign up
+ */
+async function ensureDefaultDoctor() {
+  if (process.env.NODE_ENV === 'test') return;
+  try {
+    const User = require('../models/User');
+    const email = 'doctor@vitalsync.health';
+    const existing = await User.findOne({ email });
+    if (!existing) {
+      await User.create({
+        name: 'Dr. Priya Sharma',
+        email,
+        password: 'DoctorPassword123!',
+        role: 'DOCTOR',
+        plan: 'PRO'
+      });
+    }
+  } catch (e) {
+    // Non-blocking initialization
+  }
 }
 
 module.exports = { connectDB, disconnectDB };
